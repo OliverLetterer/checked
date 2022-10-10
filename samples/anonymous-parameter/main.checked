@@ -1,0 +1,7 @@
+func function(_ value: Float) -> Float {
+    return 2.0 * (value + 1.0)
+}
+
+func main() -> Int64 {
+    return 1
+}

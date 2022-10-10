@@ -1,0 +1,9 @@
+func myFunction(value: Float) {
+    let result = 2.0 * (value + 1.0)
+}
+
+func main() -> Int64 {
+    myFunction(value: 2.0)
+    
+    return 1
+}
