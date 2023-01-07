@@ -18,6 +18,7 @@ public struct KeywordToken: Token {
         case `else`
         case `prefix`
         case `return`
+        case impure
     }
     
     public var keyword: Keyword
