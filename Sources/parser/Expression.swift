@@ -15,9 +15,9 @@ public indirect enum Expression: AST {
     case floatingPointLiteralExpression(literal: String, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
     case booleanLiteralExpression(literal: Bool, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
     case stringLiteralExpression(literal: String, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
-    case prefixOperatorExpression(operator: OperatorToken.Operator, checked: InferredType<PrefixOperatorId>, expression: Expression, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
+    case prefixOperatorExpression(operator: OperatorToken, checked: InferredType<PrefixOperatorId>, expression: Expression, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
     case variableReferenceExpression(variable: IdentifierToken, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
-    case binaryOperatorExpression(operator: OperatorToken.Operator, checked: InferredType<OperatorId>, lhs: Expression, rhs: Expression, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
+    case binaryOperatorExpression(operator: OperatorToken, checked: InferredType<OperatorId>, lhs: Expression, rhs: Expression, returns: InferredType<TypeId>, file: URL, location: Range<Int>)
     case methodCallExpression(instance: Expression, name: IdentifierToken, method: InferredType<MethodId>, arguments: [FunctionCallArgument], returns: InferredType<TypeId>, file: URL, location: Range<Int>)
     
     public struct FunctionCallArgument: AST {
@@ -157,7 +157,7 @@ public indirect enum Expression: AST {
             return [buildIn.String]
         case let .prefixOperatorExpression(operator: op, checked: _, expression: expression, returns: _, file: _, location: _):
             return expression.possibleReturnTypes(in: context).flatMap { typeReference -> [PrefixOperatorId] in
-                context.searchPrefixOperators(op, predicate: { $0.argument.typeReference == typeReference })
+                context.searchPrefixOperators(op.op, predicate: { $0.argument.typeReference == typeReference })
             }.map(\.definition.returns)
         case let .variableReferenceExpression(variable: variable, returns: _, file: _, location: _):
             if let inferredType = context.lookupVariable(variable.identifier) {
@@ -166,7 +166,7 @@ public indirect enum Expression: AST {
                 return []
             }
         case let .binaryOperatorExpression(operator: op, checked: _, lhs: lhs, rhs: rhs, returns: _, file: _, location: _):
-            var operators = context.searchOperators(op, predicate: { _ in true })
+            var operators = context.searchOperators(op.op, predicate: { _ in true })
 
             let lhsPossibleReturnsTypes = lhs.possibleReturnTypes(in: context)
             operators = operators.filter({ lhsPossibleReturnsTypes.contains($0.definition.lhs.typeReference) })
@@ -230,7 +230,7 @@ extension Expression {
             try! parser.drop()
             let expression = try Expression.parse(parser: parser)
             
-            result = .prefixOperatorExpression(operator: op.op, checked: .unresolved, expression: expression, returns: .unresolved, file: parser.file, location: op.location.lowerBound..<expression.location.upperBound)
+            result = .prefixOperatorExpression(operator: op, checked: .unresolved, expression: expression, returns: .unresolved, file: parser.file, location: op.location.lowerBound..<expression.location.upperBound)
         } else if let identifier = next as? IdentifierToken, let openParan = parser.peek(offset: 2) as? OpenParanToken, identifier.location.upperBound == openParan.location.lowerBound {
             try! parser.drop()
             try! parser.drop()
@@ -283,7 +283,7 @@ extension Expression {
             try! parser.drop()
             let rhs = try Expression.parse(parser: parser)
             
-            return .binaryOperatorExpression(operator: op.op, checked: .unresolved, lhs: methodResult, rhs: rhs, returns: .unresolved, file: parser.file, location: result.location.lowerBound..<rhs.location.upperBound)
+            return .binaryOperatorExpression(operator: op, checked: .unresolved, lhs: methodResult, rhs: rhs, returns: .unresolved, file: parser.file, location: result.location.lowerBound..<rhs.location.upperBound)
         }
         
         return methodResult

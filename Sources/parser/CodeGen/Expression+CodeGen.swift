@@ -63,7 +63,7 @@ extension Expression {
             
             switch rhs {
             case let .binaryOperatorExpression(operator: rhsOp, checked: rhsChecked, lhs: rhsLhs, rhs: rhsRhs, returns: rhsReturns, file: rhsFile, location: _):
-                if rhsOp.precedence > op.precedence {
+                if rhsOp.op.precedence > op.op.precedence {
                     let resultLhs = Expression.binaryOperatorExpression(operator: op, checked: checked, lhs: lhs, rhs: rhsLhs, returns: returns, file: file, location: lhs.location.lowerBound..<rhsLhs.location.upperBound)
                     return Expression.binaryOperatorExpression(operator: rhsOp, checked: rhsChecked, lhs: resultLhs, rhs: rhsRhs, returns: rhsReturns, file: rhsFile, location: resultLhs.location.lowerBound..<rhsRhs.location.upperBound).gen(refCounter: refCounter)
                 } else {

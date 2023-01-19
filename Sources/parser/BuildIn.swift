@@ -49,35 +49,35 @@ class BuildIn: ModuleContext, CodeGenerator {
         self.String = try! self.register(StructDefinition(name: "String"), from: nil)
         
         for primitive in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64, self.Bool, self.Float, self.Double] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .equal, lhs: .init(typeReference: primitive), rhs: .init(typeReference: primitive), returns: self.Bool)) { $0 + " == " + $1 }
+            try! self.register(OperatorDefinition(op: .equal, isImpure: false, lhs: .init(typeReference: primitive), rhs: .init(typeReference: primitive), returns: self.Bool)) { $0 + " == " + $1 }
         }
         
         for integer in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .binaryAnd, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " & " + $1 }
-            try! self.register(OperatorDefinition(op: .binaryOr, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " | " + $1 }
-            try! self.register(OperatorDefinition(op: .binaryXor, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " ^ " + $1 }
-            try! self.register(OperatorDefinition(op: .modulo, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " % " + $1 }
+            try! self.register(OperatorDefinition(op: .binaryAnd, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " & " + $1 }
+            try! self.register(OperatorDefinition(op: .binaryOr, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " | " + $1 }
+            try! self.register(OperatorDefinition(op: .binaryXor, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " ^ " + $1 }
+            try! self.register(OperatorDefinition(op: .modulo, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " % " + $1 }
         }
         
         for comparable in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64, self.Float, self.Double] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .plus, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " + " + $1 }
-            try! self.register(OperatorDefinition(op: .minus, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " - " + $1 }
-            try! self.register(OperatorDefinition(op: .times, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " * " + $1 }
-            try! self.register(OperatorDefinition(op: .division, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " / " + $1 }
-            try! self.register(OperatorDefinition(op: .greater, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " > " + $1 }
-            try! self.register(OperatorDefinition(op: .greaterEqual, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " >= " + $1 }
-            try! self.register(OperatorDefinition(op: .smaller, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " < " + $1 }
-            try! self.register(OperatorDefinition(op: .smallerEqual, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " <= " + $1 }
+            try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " + " + $1 }
+            try! self.register(OperatorDefinition(op: .minus, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " - " + $1 }
+            try! self.register(OperatorDefinition(op: .times, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " * " + $1 }
+            try! self.register(OperatorDefinition(op: .division, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " / " + $1 }
+            try! self.register(OperatorDefinition(op: .greater, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " > " + $1 }
+            try! self.register(OperatorDefinition(op: .greaterEqual, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " >= " + $1 }
+            try! self.register(OperatorDefinition(op: .smaller, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " < " + $1 }
+            try! self.register(OperatorDefinition(op: .smallerEqual, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " <= " + $1 }
         }
         
-        try! self.register(PrefixOperatorDefinition(op: .not, argument: .init(typeReference: self.Bool), returns: self.Bool)) { "!" + $0 }
+        try! self.register(PrefixOperatorDefinition(op: .not, isImpure: false, argument: .init(typeReference: self.Bool), returns: self.Bool)) { "!" + $0 }
         
-        try! self.register(OperatorDefinition(op: .and, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " && " + $1 }
-        try! self.register(OperatorDefinition(op: .or, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " || " + $1 }
+        try! self.register(OperatorDefinition(op: .and, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " && " + $1 }
+        try! self.register(OperatorDefinition(op: .or, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " || " + $1 }
         
-        try! self.register(OperatorDefinition(op: .plus, lhs: .init(typeReference: self.String), rhs: .init(typeReference: self.String), returns: self.String)) { "String_add(\($0), \($1))" }
+        try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: self.String), rhs: .init(typeReference: self.String), returns: self.String)) { "String_add(\($0), \($1))" }
         
-        try! self.register(type: self.String, MethodDefinition(name: "replacing", arguments: [ .init(name: "occurrenceOf", typeReference: self.String), .init(name: "with", typeReference: self.String) ], returns: self.String)) { "String_replacingOccurenceOfWith(\($0), \($1.joined(separator: ", ")))" }
+        try! self.register(type: self.String, MethodDefinition(name: "replacing", isImpure: false, arguments: [ .init(name: "occurrenceOf", typeReference: self.String), .init(name: "with", typeReference: self.String) ], returns: self.String)) { "String_replacingOccurenceOfWith(\($0), \($1.joined(separator: ", ")))" }
     }
     
     private func register(_ operatorDefinition: PrefixOperatorDefinition, codeGen: @escaping (String) -> String) throws {

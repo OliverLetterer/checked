@@ -122,7 +122,7 @@ extension Context {
     }
     
     func lookupVariable(_ name: String) -> VariableDefinition? {
-        if let self = self as? VariableDefiningContext {
+        if let self = self as? FunctionBodyContext {
             if let definitions = self.variables.lookup[name] {
                 return definitions
             }
@@ -251,11 +251,12 @@ extension OperatorDefiningContext {
     }
 }
 
-public protocol VariableDefiningContext: Context {
+public protocol FunctionBodyContext: Context {
+    var isImpure: Bool { get }
     var variables: (lookup: [String: VariableDefinition], locations: [String: SourceElement]) { get set }
 }
 
-extension VariableDefiningContext {
+extension FunctionBodyContext {
     func register(variable: VariableDefinition, from sourceElement: SourceElement?) throws {
         if self.variables.lookup[variable.name] != nil {
             throw ParserError.redeclaration(name: "variable", existing: self.variables.locations[variable.name], new: sourceElement!)

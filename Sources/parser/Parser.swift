@@ -26,6 +26,8 @@ public enum ParserError: Error {
     case blockDoesntReturnAnyValue(reference: SourceElement)
     case immutableExpressionAssignment(expression: Expression)
     case invalidMainDeclaration(main: FunctionDeclaration)
+    case modifierRedeclaration(keyword: KeywordToken)
+    case invalidImpureCall(name: String, statement: any Token)
 }
 
 extension ParserError: SourceFileError {
@@ -41,6 +43,10 @@ extension ParserError: SourceFileError {
             return expression.file
         case let .invalidMainDeclaration(main: main):
             return main.file
+        case let .modifierRedeclaration(keyword: keyword):
+            return keyword.file
+        case let .invalidImpureCall(name: _, statement: statement):
+            return statement.file
         }
     }
     
@@ -69,6 +75,10 @@ extension ParserError: SourceFileError {
             return expression.location
         case let .invalidMainDeclaration(main: main):
             return main.name.location
+        case let .modifierRedeclaration(keyword: keyword):
+            return keyword.location
+        case let .invalidImpureCall(name: _, statement: statement):
+            return statement.location
         }
     }
     
@@ -100,6 +110,10 @@ extension ParserError: SourceFileError {
             return "assignment to immutable value"
         case .invalidMainDeclaration(main: _):
             return "invalid main declaration"
+        case let .modifierRedeclaration(keyword: keyword):
+            return "Invalid modifier redeclaration: \(keyword.keyword.rawValue)"
+        case let .invalidImpureCall(name: name, statement: statement):
+            return "Invalid impure call of \(name) '\(statement.content)' in pure context"
         }
     }
 }

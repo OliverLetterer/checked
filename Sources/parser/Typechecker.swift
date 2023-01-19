@@ -98,18 +98,18 @@ public class Typechecker {
             typechecked.prefixOperatorDeclarations = try declaration.prefixOperatorDeclarations.map { declaration in
                 let context = try PrefixOperatorContext(operatorDefinition: declaration.operatorDefinition, codeGen: codeGen, parent: module)
                 
-                return PrefixOperatorDeclaration(prefixToken: declaration.prefixToken, operatorToken: declaration.operatorToken, op: declaration.op, argument: declaration.argument, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: [ declaration.argument ], returnType: declaration.returns.checked.typeId, reference: declaration, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
+                return PrefixOperatorDeclaration(prefixToken: declaration.prefixToken, operatorToken: declaration.operatorToken, op: declaration.op, isImpure: declaration.isImpure, argument: declaration.argument, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: [ declaration.argument ], returnType: declaration.returns.checked.typeId, reference: declaration, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
             }
             
             typechecked.operatorDeclarations = try declaration.operatorDeclarations.map { declaration in
                 let context = try OperatorContext(operatorDefinition: declaration.operatorDefinition, codeGen: codeGen, parent: module)
                 
-                return OperatorDeclaration(operatorToken: declaration.operatorToken, op: declaration.op, lhs: declaration.lhs, rhs: declaration.rhs, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: [ declaration.lhs, declaration.rhs ], returnType: declaration.returns.checked.typeId, reference: declaration, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
+                return OperatorDeclaration(operatorToken: declaration.operatorToken, op: declaration.op, isImpure: declaration.isImpure, lhs: declaration.lhs, rhs: declaration.rhs, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: [ declaration.lhs, declaration.rhs ], returnType: declaration.returns.checked.typeId, reference: declaration, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
             }
             
             typechecked.functionDeclarations = try declaration.functionDeclarations.map { declaration in
                 let context = try FunctionContext(functionDefinition: declaration.functionDefinition, codeGen: codeGen, parent: module)
-                return FunctionDeclaration(name: declaration.name, arguments: declaration.arguments, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: declaration.arguments, returnType: declaration.returns?.checked.typeId, reference: declaration.name, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
+                return FunctionDeclaration(name: declaration.name, isImpure: declaration.isImpure, arguments: declaration.arguments, returns: declaration.returns, openAngleBracket: declaration.openAngleBracket, statements: try typecheckFunctionBody(declaration.statements, arguments: declaration.arguments, returnType: declaration.returns?.checked.typeId, reference: declaration.name, module: module, context: context), closeAngleBracket: declaration.closeAngleBracket, checked: declaration.checked, file: declaration.file, location: declaration.location)
             }
             result[index] = typechecked
         }
@@ -158,7 +158,7 @@ public class Typechecker {
         return result
     }
     
-    private func typecheckFunctionBody(_ statements: [Statement], arguments: [FunctionDeclaration.FunctionArgumentDeclaration], returnType: TypeId?, reference: SourceElement, module: ModuleContext, context: VariableDefiningContext) throws -> [Statement] {
+    private func typecheckFunctionBody(_ statements: [Statement], arguments: [FunctionDeclaration.FunctionArgumentDeclaration], returnType: TypeId?, reference: SourceElement, module: ModuleContext, context: FunctionBodyContext) throws -> [Statement] {
         try arguments.forEach { argument in
             try context.register(variable: VariableDefinition(isMutable: false, name: argument.name, type: argument.typeReference.checked.typeId), from: argument)
         }
@@ -172,7 +172,7 @@ public class Typechecker {
         return result
     }
     
-    private func typecheck(_ statement: Statement, module: ModuleContext, context: VariableDefiningContext, returnType: TypeId?) throws -> Statement {
+    private func typecheck(_ statement: Statement, module: ModuleContext, context: FunctionBodyContext, returnType: TypeId?) throws -> Statement {
         switch statement {
         case let .expression(expression):
             let typechecked = try typecheck(expression, module: module, context: context, preferredReturnType: .relaxed(preferredReturnTypes: [ buildIn.Void ]))
@@ -325,7 +325,7 @@ public class Typechecker {
         }
     }
     
-    private func typecheck(statement: Statement, module: ModuleContext, context: VariableDefiningContext, returnType: TypeId?, withInferredType: TypeId?) throws -> (Statement, TypeId) {
+    private func typecheck(statement: Statement, module: ModuleContext, context: FunctionBodyContext, returnType: TypeId?, withInferredType: TypeId?) throws -> (Statement, TypeId) {
         switch statement {
         case let .expression(expression):
             let typechecked: Expression
@@ -434,7 +434,7 @@ public class Typechecker {
         case strict(preferredReturnTypes: [TypeId])
     }
     
-    private func typecheck(_ expression: Expression, module: ModuleContext, context: Context, preferredReturnType: ReturnTypePolicy) throws -> Expression {
+    private func typecheck(_ expression: Expression, module: ModuleContext, context: FunctionBodyContext, preferredReturnType: ReturnTypePolicy) throws -> Expression {
         func apply(possibleReturnTypes: [TypeId], name: String) throws -> InferredType<TypeId> {
             guard possibleReturnTypes.count > 0 else {
                 throw ParserError.unkownReference(name: name, reference: expression)
@@ -483,6 +483,12 @@ public class Typechecker {
                 guard let function = functions.first(where: { preferredReturnTypes.contains($0.definition.inferredReturnType(in: context)) }) ?? functions.first else {
                     throw ParserError.unkownReference(name: name.identifier, reference: expression)
                 }
+                
+                if function.definition.isImpure {
+                    guard context.isImpure else {
+                        throw ParserError.invalidImpureCall(name: "function", statement: name)
+                    }
+                }
 
                 let typechecked = try arguments.enumerated().map { pair -> Expression.FunctionCallArgument in
                     let (index, argument) = pair
@@ -520,11 +526,17 @@ public class Typechecker {
                 return typechecked
             case let .relaxed(preferredReturnTypes: preferredReturnTypes):
                 let possibleReturnTypes = _expression.possibleReturnTypes(in: context)
-                let operators = context.searchPrefixOperators(op, predicate: { possibleReturnTypes.contains($0.argument.typeReference) })
+                let operators = context.searchPrefixOperators(op.op, predicate: { possibleReturnTypes.contains($0.argument.typeReference) })
                 let typechecked = try typecheck(_expression, module: module, context: context, preferredReturnType: .strict(preferredReturnTypes: operators.map(\.definition.argument.typeReference)))
 
                 guard let prefixOperator = operators.first(where: { preferredReturnTypes.contains($0.definition.returns) }) ?? operators.first else {
                     throw ParserError.unkownReference(name: op.description, reference: expression)
+                }
+                
+                if prefixOperator.definition.isImpure {
+                    guard context.isImpure else {
+                        throw ParserError.invalidImpureCall(name: "prefix operator", statement: op)
+                    }
                 }
 
                 return .prefixOperatorExpression(operator: op, checked: .inferred(type: prefixOperator, context: context, typechecker: self), expression: typechecked, returns: .inferred(type: prefixOperator.definition.returns, context: context, typechecker: self), file: file, location: location)
@@ -550,7 +562,7 @@ public class Typechecker {
 
                 return typechecked
             case let .relaxed(preferredReturnTypes: preferredReturnTypes):
-                var operators = context.searchOperators(op, predicate: { _ in true })
+                var operators = context.searchOperators(op.op, predicate: { _ in true })
 
                 let lhsPossibleReturnTypes = lhs.possibleReturnTypes(in: context)
                 operators = operators.filter({ lhsPossibleReturnTypes.contains($0.definition.lhs.typeReference) })
@@ -560,6 +572,12 @@ public class Typechecker {
 
                 guard let function = operators.first(where: { preferredReturnTypes.contains($0.definition.returns) }) ?? operators.first else {
                     throw ParserError.unkownReference(name: op.description, reference: expression)
+                }
+                
+                if function.definition.isImpure {
+                    guard context.isImpure else {
+                        throw ParserError.invalidImpureCall(name: "operator", statement: op)
+                    }
                 }
 
                 let lhsTypechecked = try typecheck(lhs, module: module, context: context, preferredReturnType: .strict(preferredReturnTypes: [ function.definition.lhs.typeReference ]))
@@ -594,6 +612,12 @@ public class Typechecker {
 
                 guard let method = methods.first(where: { preferredReturnTypes.contains($0.definition.inferredReturnType(in: context)) }) ?? methods.first else {
                     throw ParserError.unkownReference(name: name.identifier, reference: expression)
+                }
+                
+                if method.definition.isImpure {
+                    guard context.isImpure else {
+                        throw ParserError.invalidImpureCall(name: "method", statement: name)
+                    }
                 }
 
                 let typecheckedInstance = try typecheck(instance, module: module, context: context, preferredReturnType: .strict(preferredReturnTypes: [ method.context.type ]))

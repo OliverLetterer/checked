@@ -186,4 +186,5 @@ extension ParserAcceptable where Self == KeywordAcceptable {
     static var `else`: Self { KeywordAcceptable(keyword: .else) }
     static var `prefix`: Self { KeywordAcceptable(keyword: .prefix) }
     static var `return`: Self { KeywordAcceptable(keyword: .return) }
+    static var impure: Self { KeywordAcceptable(keyword: .impure) }
 }

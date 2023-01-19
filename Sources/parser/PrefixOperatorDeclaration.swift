@@ -10,6 +10,7 @@ import CheckedScanner
 
 public struct PrefixOperatorDefinition: Equatable, Hashable {
     public var op: OperatorToken.Operator
+    public var isImpure: Bool
     public var argument: FunctionDefinition.FunctionArgumentDefinition
     public var returns: TypeId
     
@@ -22,6 +23,7 @@ public struct PrefixOperatorDeclaration: AST {
     public var prefixToken: KeywordToken
     public var operatorToken: KeywordToken
     public var op: OperatorToken
+    public var isImpure: Bool
     public var argument: FunctionDeclaration.FunctionArgumentDeclaration
     public var returns: TypeReference
     public var openAngleBracket: OpenAngleBracketToken
@@ -31,10 +33,11 @@ public struct PrefixOperatorDeclaration: AST {
     public var file: URL
     public var location: Range<Int>
     
-    init(prefixToken: KeywordToken, operatorToken: KeywordToken, op: OperatorToken, argument: FunctionDeclaration.FunctionArgumentDeclaration, returns: TypeReference, openAngleBracket: OpenAngleBracketToken, statements: [Statement], closeAngleBracket: CloseAngleBracketToken, checked: InferredType<PrefixOperatorId>, file: URL, location: Range<Int>) {
+    init(prefixToken: KeywordToken, operatorToken: KeywordToken, op: OperatorToken, isImpure: Bool, argument: FunctionDeclaration.FunctionArgumentDeclaration, returns: TypeReference, openAngleBracket: OpenAngleBracketToken, statements: [Statement], closeAngleBracket: CloseAngleBracketToken, checked: InferredType<PrefixOperatorId>, file: URL, location: Range<Int>) {
         self.prefixToken = prefixToken
         self.operatorToken = operatorToken
         self.op = op
+        self.isImpure = isImpure
         self.argument = argument
         self.returns = returns
         self.openAngleBracket = openAngleBracket
@@ -46,13 +49,14 @@ public struct PrefixOperatorDeclaration: AST {
     }
     
     public var operatorDefinition: PrefixOperatorDefinition {
-        return PrefixOperatorDefinition(op: op.op, argument: argument.argumentDefinition, returns: returns.checked.typeId)
+        return PrefixOperatorDefinition(op: op.op, isImpure: isImpure, argument: argument.argumentDefinition, returns: returns.checked.typeId)
     }
     
     public var description: String {
         return """
         \(type(of: self))
         - operator: \(op.op.description)
+        - isImpure: \(isImpure)
         - argument:
         \(argument.description.withIndent(4))
         - returns: \(returns.description)
@@ -64,10 +68,21 @@ public struct PrefixOperatorDeclaration: AST {
 
 extension PrefixOperatorDeclaration {
     public static func canParse(parser: Parser) -> Bool {
-        return parser.matches(required: [ .prefix, .operator ])
+        return parser.matches(optional: [ .impure ], required: [ .prefix, .operator ])
     }
     
     public static func parse(parser: Parser) throws -> PrefixOperatorDeclaration {
+        var modifiers: Set<KeywordToken.Keyword> = []
+        
+        while let keyword = parser.peek() as? KeywordToken, keyword.keyword != .prefix {
+            guard !modifiers.contains(keyword.keyword) else {
+                throw ParserError.modifierRedeclaration(keyword: keyword)
+            }
+            
+            modifiers.insert(keyword.keyword)
+            try! parser.drop()
+        }
+        
         let prefixToken = try parser.accept(.prefix)
         let operatorToken = try parser.accept(.operator)
         
@@ -98,6 +113,6 @@ extension PrefixOperatorDeclaration {
         
         let statements: [Statement] = try [Statement].parse(parser: parser)
         let closeAngleBracket = try parser.accept(.closeAngleBracket)
-        return PrefixOperatorDeclaration(prefixToken: prefixToken, operatorToken: operatorToken, op: op, argument: argument, returns: returns, openAngleBracket: openAngleBracket, statements: statements, closeAngleBracket: closeAngleBracket, checked: .unresolved, file: parser.file, location: prefixToken.location.lowerBound..<closeAngleBracket.location.upperBound)
+        return PrefixOperatorDeclaration(prefixToken: prefixToken, operatorToken: operatorToken, op: op, isImpure: modifiers.contains(.impure), argument: argument, returns: returns, openAngleBracket: openAngleBracket, statements: statements, closeAngleBracket: closeAngleBracket, checked: .unresolved, file: parser.file, location: prefixToken.location.lowerBound..<closeAngleBracket.location.upperBound)
     }
 }

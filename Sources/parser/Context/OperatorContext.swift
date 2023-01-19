@@ -8,8 +8,13 @@
 import Foundation
 import CheckedScanner
 
-public class OperatorContext: Context, VariableDefiningContext {
+public class OperatorContext: Context, FunctionBodyContext {
     public let qualifedName: String
+    
+    public var isImpure: Bool {
+        return operatorDefinition.isImpure
+    }
+    
     public var operatorDefinition: OperatorDefinition
     public var variables: (lookup: [String : VariableDefinition], locations: [String : SourceElement])
     public var codeGen: CodeGen
