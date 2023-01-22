@@ -18,7 +18,7 @@ private extension PrimitiveExpression {
     }
 }
 
-private extension PrimitiveStatement.AssignmentExpression {
+private extension PrimitiveStatement.AssignableExpression {
     func references(variable: String) -> Bool {
         switch self {
         case let .expression(expression):
@@ -172,7 +172,7 @@ class RefCounter {
             
             let hadUninitializedVariable: Bool = uninitializedVariable != nil
             
-            func referenceCountExpression(expression: PrimitiveStatement.AssignmentExpression?) -> [PrimitiveStatement] {
+            func referenceCountExpression(expression: PrimitiveStatement.AssignableExpression?) -> [PrimitiveStatement] {
                 guard let expression = expression else {
                     return []
                 }

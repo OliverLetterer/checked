@@ -11,23 +11,24 @@ extension Statement {
     func gen(refCounter: RefCounter) -> [PrimitiveStatement] {
         switch self {
         case let .expression(expression):
-            return expression.gen(refCounter: refCounter).0
+            let (statements, expression) = expression.gen(refCounter: refCounter)
+            return statements + [ .expression(uuid: refCounter.newUUID(), expression) ]
         case let .returnStatement(expression: expression, file: _, location: _):
             if let expression = expression {
-                let (statements, expression) = expression.gen(refCounter: refCounter)
+                let (statements, expression) = expression.name(refCounter: refCounter)
                 return statements + [ .returnStatement(uuid: refCounter.newUUID(), expression: expression) ]
             } else {
                 return [ .returnStatement(uuid: refCounter.newUUID(), expression: nil) ]
             }
         case let .variableDeclaration(isMutable: _, name: name, typeReference: _, expression: expression, file: _, location: _):
-            let (statements, primitiveExpression) = expression.gen(refCounter: refCounter)
-            return statements + [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: expression.returns.id, expression: .expression(primitiveExpression)) ]
+            let (statements, expression) = expression.gen(refCounter: refCounter)
+            return statements + [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: expression.returns, expression: expression) ]
         case let .ifStatement(conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             var primitiveStatements: [PrimitiveStatement] = []
             var primitiveConditions: [PrimitiveExpression] = []
             
             conditions.forEach { condition in
-                let (statements, expression) = condition.gen(refCounter: refCounter)
+                let (statements, expression) = condition.name(refCounter: refCounter)
                 primitiveStatements.append(contentsOf: statements)
                 primitiveConditions.append(expression)
             }
@@ -40,7 +41,7 @@ extension Statement {
                     var primitiveConditions: [PrimitiveExpression] = []
                     
                     conditions.forEach { condition in
-                        let (statements, expression) = condition.gen(refCounter: refCounter)
+                        let (statements, expression) = condition.name(refCounter: refCounter)
                         primitiveStatements.append(contentsOf: statements)
                         primitiveConditions.append(expression)
                     }
@@ -53,9 +54,9 @@ extension Statement {
                 primitiveElseIfs = nil
             }
             
-            let last = PrimitiveStatement.ifStatement(uuid: refCounter.newUUID(), conditions: primitiveConditions, statements: statements.flatMap({ $0.gen(refCounter: refCounter) }), elseIfs: primitiveElseIfs, elseStatements: elseStatements?.flatMap({ $0.gen(refCounter: refCounter) }))
+            let statement = PrimitiveStatement.ifStatement(uuid: refCounter.newUUID(), conditions: primitiveConditions, statements: statements.flatMap({ $0.gen(refCounter: refCounter) }), elseIfs: primitiveElseIfs, elseStatements: elseStatements?.flatMap({ $0.gen(refCounter: refCounter) }))
             
-            return primitiveStatements + [ last ]
+            return primitiveStatements + [ statement ]
         case let .variableIfDeclaration(isMutable: _, name: name, typeReference: _, checked: checked, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             var primitiveStatements: [PrimitiveStatement] = [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: checked.id, expression: nil) ]
             
@@ -86,8 +87,8 @@ extension Statement {
             
             return primitiveStatements
         case let .assignmentStatement(lhs: lhs, rhs: rhs, file: _, location: _):
-            let (lhsStatements, lhsExpression) = lhs.gen(refCounter: refCounter)
-            let (rhsStatements, rhsExpression) = rhs.gen(refCounter: refCounter)
+            let (lhsStatements, lhsExpression) = lhs.name(refCounter: refCounter)
+            let (rhsStatements, rhsExpression) = rhs.name(refCounter: refCounter)
             
             return lhsStatements + rhsStatements + [ .assignmentStatement(uuid: refCounter.newUUID(), lhs: lhsExpression, rhs: .expression(rhsExpression)) ]
         case let .returnIfStatement(checked: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):

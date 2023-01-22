@@ -9,12 +9,21 @@ import Foundation
 import CheckedScanner
 
 public indirect enum PrimitiveStatement {
-    public enum AssignmentExpression {
+    public enum AssignableExpression {
         case expression(PrimitiveExpression)
         case functionCallExpression(function: FunctionId, arguments: [PrimitiveExpression], returns: TypeId)
         case prefixOperatorExpression(operator: PrefixOperatorId, expression: PrimitiveExpression, returns: TypeId)
         case binaryOperatorExpression(OperatorId, lhs: PrimitiveExpression, rhs: PrimitiveExpression, returns: TypeId)
         case methodCallExpression(instance: PrimitiveExpression, method: MethodId, arguments: [PrimitiveExpression], returns: TypeId)
+        
+        var returns: TypeId {
+            switch self {
+            case let .expression(expression):
+                return expression.returns
+            case let .functionCallExpression(function: _, arguments: _, returns: returns), let .prefixOperatorExpression(operator: _, expression: _, returns: returns), let .binaryOperatorExpression(_, lhs: _, rhs: _, returns: returns), let .methodCallExpression(instance: _, method: _, arguments: _, returns: returns):
+                return returns
+            }
+        }
         
         func implement() -> String {
             switch self {
@@ -32,11 +41,11 @@ public indirect enum PrimitiveStatement {
         }
     }
     
-    case expression(uuid: UUID, AssignmentExpression)
+    case expression(uuid: UUID, AssignableExpression)
     case returnStatement(uuid: UUID, expression: PrimitiveExpression?)
-    case variableDeclaration(uuid: UUID, name: String, typeReference: TypeId, expression: AssignmentExpression?)
+    case variableDeclaration(uuid: UUID, name: String, typeReference: TypeId, expression: AssignableExpression?)
     case ifStatement(uuid: UUID, conditions: [PrimitiveExpression], statements: [PrimitiveStatement], elseIfs: [(conditions: [PrimitiveExpression], statements: [PrimitiveStatement])]?, elseStatements: [PrimitiveStatement]?)
-    case assignmentStatement(uuid: UUID, lhs: PrimitiveExpression, rhs: AssignmentExpression)
+    case assignmentStatement(uuid: UUID, lhs: PrimitiveExpression, rhs: AssignableExpression)
     case retain(String)
     case release(String)
     
@@ -60,18 +69,10 @@ public indirect enum PrimitiveStatement {
                 return "return;"
             }
         case let .variableDeclaration(uuid: _, name: name, typeReference: typeReference, expression: expression):
-            if typeReference == typeReference.context.moduleContext.typechecker!.buildIn.Void {
-                if let expression = expression {
-                    return expression.implement() + ";"
-                } else {
-                    return ""
-                }
+            if let expression = expression {
+                return typeReference.declareReference() + " " + name.toIdentifier() + " = " + expression.implement() + ";"
             } else {
-                if let expression = expression {
-                    return typeReference.declareReference() + " " + name.toIdentifier() + " = " + expression.implement() + ";"
-                } else {
-                    return typeReference.declareReference() + " " + name.toIdentifier() + ";"
-                }
+                return typeReference.declareReference() + " " + name.toIdentifier() + ";"
             }
         case let .ifStatement(uuid: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements):
             var result = """
