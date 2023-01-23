@@ -63,6 +63,9 @@ public class CodeGen {
     private var variableCount: UInt64 = 0
     private var variableLock: os_unfair_lock = .init()
     
+    private var stringLiterals: [String: String] = [:]
+    private var stringLiteralLock: os_unfair_lock = .init()
+    
     var functions: [FunctionId: (FunctionDeclaration, [PrimitiveStatement])] = [:]
     var operators: [OperatorId: (OperatorDeclaration, [PrimitiveStatement])] = [:]
     var prefixOperators: [PrefixOperatorId: (PrefixOperatorDeclaration, [PrimitiveStatement])] = [:]
@@ -91,6 +94,21 @@ public class CodeGen {
         let name = "_variable_" + variableCount.description
         variableCount += 1
         return name
+    }
+    
+    public func variable(forStringLiteral stringLiteral: String, type: TypeId) -> String {
+        os_unfair_lock_lock(&stringLiteralLock)
+        defer {
+            os_unfair_lock_unlock(&stringLiteralLock)
+        }
+        
+        if let variable = stringLiterals[stringLiteral] {
+            return variable
+        } else {
+            let variable = type.implement(stringLiteral: stringLiteral)
+            stringLiterals[stringLiteral] = variable
+            return variable
+        }
     }
     
     public func gen(_ topLevelDeclarations: [TopLevelDeclaration]) throws {
@@ -122,7 +140,7 @@ public class CodeGen {
             let arguments: String = declaration.arguments.map({ $0.typeReference.checked.typeId.declareReference() + " " + $0.name.toIdentifier() }).joined(separator: ", ")
             implementation.append("""
             \(declaration.returnType?.checked.typeId.declareReference() ?? "void") \(declaration.functionName)(\(arguments)) {
-            \(CodeGen.refCount(statements: statements).map({ $0.implement() }).joined(separator: "\n").withIndent(4))
+            \(refCount(statements: statements).map({ $0.implement(codeGen: self) }).joined(separator: "\n").withIndent(4))
             }
             """)
         }
@@ -216,7 +234,7 @@ public class CodeGen {
                 }
 
                 result.append(statement)
-            case let .variableDeclaration(uuid: uuid, name: name, typeReference: _, expression: expression):
+            case let .variableDeclaration(uuid: uuid, name: name, typeReference: typeReference, expression: expression):
                 if requiredVariables.contains(name) {
                     result.append(statement)
                     requiredVariables.remove(name)
@@ -227,8 +245,13 @@ public class CodeGen {
                 } else {
                     if let expression = expression {
                         if expression.isImpure {
-                            result.append(.expression(uuid: uuid, expression))
-                            requiredVariables.formUnion(expression.inputs)
+                            if typeReference.isRefCounted {
+                                result.append(statement)
+                                requiredVariables.formUnion(expression.inputs)
+                            } else {
+                                result.append(.expression(uuid: uuid, expression))
+                                requiredVariables.formUnion(expression.inputs)
+                            }
                         }
                     }
                 }

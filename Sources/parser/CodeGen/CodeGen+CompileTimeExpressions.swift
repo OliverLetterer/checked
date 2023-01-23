@@ -22,7 +22,7 @@ public enum CompileTimeExpression: Equatable {
         case let .booleanLiteral(literal: literal, returns: returns):
             return .booleanLiteralExpression(literal: literal, returns: returns)
         case let .stringLiteral(literal: literal, returns: returns):
-            return .stringLiteralExpression(literal: literal, variable: "", returns: returns)
+            return .stringLiteralExpression(literal: literal, returns: returns)
         }
     }
     
@@ -79,7 +79,7 @@ private extension PrimitiveExpression {
             return .floatingPointLiteral(literal: literal, returns: returns)
         case let .booleanLiteralExpression(literal: literal, returns: returns):
             return .booleanLiteral(literal: literal, returns: returns)
-        case let .stringLiteralExpression(literal: literal, variable: _, returns: returns):
+        case let .stringLiteralExpression(literal: literal, returns: returns):
             return .stringLiteral(literal: literal, returns: returns)
         case let .variableReferenceExpression(variable: name, returns: _):
             return variables[name]

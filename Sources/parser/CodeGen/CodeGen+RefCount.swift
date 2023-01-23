@@ -79,7 +79,7 @@ private extension PrimitiveStatement {
 }
 
 extension CodeGen {
-    static func refCount(statements: [PrimitiveStatement], existingVariables: Set<String> = [], uninitializedVariables: Set<String> = []) -> [PrimitiveStatement] {
+    func refCount(statements: [PrimitiveStatement], existingVariables: Set<String> = [], uninitializedVariables: Set<String> = []) -> [PrimitiveStatement] {
         var trackedExistingVariables: [String: UUID] = [:]
         var trackedVariables: [String: UUID] = [:]
         
@@ -153,8 +153,8 @@ extension CodeGen {
                     switch expression {
                     case let .variableReferenceExpression(variable: variable, returns: _):
                         return [ .retain(variable) ]
-                    case let .stringLiteralExpression(literal: _, variable: variable, returns: _):
-                        return [ .retain(variable) ]
+                    case let .stringLiteralExpression(literal: literal, returns: returns):
+                        return [ .retain(variable(forStringLiteral: literal, type: returns)) ]
                     default:
                         return []
                     }
@@ -176,10 +176,10 @@ extension CodeGen {
                     refCountedStatements = [ statement ]
                 } else {
                     let lhsRelease: [PrimitiveStatement]
-                    if uninitializedVariables.contains(lhs.implement()) {
+                    if uninitializedVariables.contains(lhs.implement(codeGen: self)) {
                         lhsRelease = []
                     } else {
-                        lhsRelease = [ .release(lhs.implement()) ]
+                        lhsRelease = [ .release(lhs.implement(codeGen: self)) ]
                     }
                     
                     refCountedStatements = referenceCountExpression(expression: rhs) + lhsRelease + [ statement ]

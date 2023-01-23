@@ -80,8 +80,7 @@ extension Expression {
         case let .booleanLiteralExpression(literal: literal, returns: returns, file: _, location: _):
             return ([], .booleanLiteralExpression(literal: literal, returns: returns.id))
         case let .stringLiteralExpression(literal: literal, returns: returns, file: _, location: _):
-            let variable = returns.id.implement(stringLiteral: literal)
-            return ([], .stringLiteralExpression(literal: literal, variable: variable, returns: returns.id))
+            return ([], .stringLiteralExpression(literal: literal, returns: returns.id))
         case let .variableReferenceExpression(variable: variable, returns: returns, file: _, location: _):
             return ([], .variableReferenceExpression(variable: variable.identifier, returns: returns.id))
         }
