@@ -44,14 +44,14 @@ public indirect enum PrimitiveStatement {
     case expression(uuid: UUID, AssignableExpression)
     case returnStatement(uuid: UUID, expression: PrimitiveExpression?)
     case variableDeclaration(uuid: UUID, name: String, typeReference: TypeId, expression: AssignableExpression?)
-    case ifStatement(uuid: UUID, conditions: [PrimitiveExpression], statements: [PrimitiveStatement], elseIfs: [(conditions: [PrimitiveExpression], statements: [PrimitiveStatement])]?, elseStatements: [PrimitiveStatement]?)
+    case ifStatement(uuid: UUID, conditions: [[PrimitiveExpression]], statements: [[PrimitiveStatement]], elseStatements: [PrimitiveStatement]?)
     case assignmentStatement(uuid: UUID, lhs: PrimitiveExpression, rhs: AssignableExpression)
     case retain(String)
     case release(String)
     
     var uuid: UUID {
         switch self {
-        case let .expression(uuid: uuid, _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseIfs: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _):
+        case let .expression(uuid: uuid, _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _):
             return uuid
         case .retain, .release:
             fatalError()
@@ -74,21 +74,17 @@ public indirect enum PrimitiveStatement {
             } else {
                 return typeReference.declareReference() + " " + name.toIdentifier() + ";"
             }
-        case let .ifStatement(uuid: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements):
-            var result = """
-            if (\(conditions.map({ "(\($0.implement()))" }).joined(separator: " && "))) {
-            \(statements.map({ $0.implement() }).joined(separator: "\n").withIndent(4))
-            }
-            """
+        case let .ifStatement(uuid: _, conditions: conditions, statements: statements, elseStatements: elseStatements):
+            var result: String = ""
             
-            if let elseIfs = elseIfs {
-                elseIfs.forEach { elseIf in
-                    result += """
-                     else if (\(elseIf.conditions.map({ "(\($0.implement()))" }).joined(separator: " && "))) {
-                    \(elseIf.statements.map({ $0.implement() }).joined(separator: "\n").withIndent(4))
-                    }
-                    """
+            conditions.enumerated().forEach { index, conditions in
+                let prefix = index == 0 ? "if" : " else if"
+                
+                result += """
+                \(prefix) (\(conditions.map({ "(\($0.implement()))" }).joined(separator: " && "))) {
+                \(statements[index].map({ $0.implement() }).joined(separator: "\n").withIndent(4))
                 }
+                """
             }
             
             if let elseStatements = elseStatements {

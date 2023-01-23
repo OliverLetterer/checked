@@ -53,13 +53,12 @@ private extension PrimitiveStatement {
             return expression?.references(variable: variable) ?? false
         case let .variableDeclaration(uuid: _, name: _, typeReference: _, expression: expression):
             return expression?.references(variable: variable) ?? false
-        case let .ifStatement(uuid: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements):
-            let conditionsReferences = conditions.contains(where: { $0.references(variable: variable) })
-            let statementsReferences = statements.prefix(while: { !$0.declares(variable: variable) }).contains(where: { $0.references(variable: variable) })
-            let elseIfsReferences = elseIfs?.contains(where: { $0.conditions.contains(where: { $0.references(variable: variable) }) || $0.statements.prefix(while: { !$0.declares(variable: variable) }).contains(where: { $0.references(variable: variable) }) }) ?? false
+        case let .ifStatement(uuid: _, conditions: conditions, statements: statements, elseStatements: elseStatements):
+            let conditionsReferences = conditions.contains(where: { $0.contains(where: { $0.references(variable: variable) }) })
+            let statementsReferences = statements.contains(where: { $0.prefix(while: { !$0.declares(variable: variable) }).contains(where: { $0.references(variable: variable) }) })
             let elseStatementsReferences = elseStatements?.prefix(while: { !$0.declares(variable: variable) }).contains(where: { $0.references(variable: variable) }) ?? false
             
-            return conditionsReferences || statementsReferences || elseIfsReferences || elseStatementsReferences
+            return conditionsReferences || statementsReferences || elseStatementsReferences
         case let .assignmentStatement(uuid: _, lhs: lhs, rhs: rhs):
             return lhs.references(variable: variable) || rhs.references(variable: variable)
         case .retain, .release:
@@ -161,10 +160,10 @@ class RefCounter {
                 didReturn = true
                 
                 switch statement {
-                case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements):
+                case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseStatements: elseStatements):
                     let variables = existingVariables.subtracting(freedExistingVariables).filter({ variable in !usedVariables.contains(where: { $0.name == variable }) }).filter({ statement.references(variable: $0) }).union(usedVariables.filter({ !$0.freed }).map(\.name))
                     let uninitialized = uninitializedVariables.union(uninitializedVariable.map({ [ $0 ] }) ?? [])
-                    return [ .ifStatement(uuid: uuid, conditions: conditions, statements: refCount(statements: statements, existingVariables: variables, uninitializedVariables: uninitialized), elseIfs: elseIfs?.map({ ($0.conditions, refCount(statements: $0.statements, existingVariables: variables, uninitializedVariables: uninitialized)) }), elseStatements: elseStatements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) })) ]
+                    return [ .ifStatement(uuid: uuid, conditions: conditions, statements: statements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) }), elseStatements: elseStatements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) })) ]
                 default:
                     return [ statement ]
                 }
@@ -194,10 +193,10 @@ class RefCounter {
             
             let refCountedStatements: [PrimitiveStatement]
             switch statement {
-            case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements):
+            case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseStatements: elseStatements):
                 let variables = existingVariables.subtracting(freedExistingVariables).filter({ variable in !usedVariables.contains(where: { $0.name == variable }) }).union(usedVariables.filter({ !$0.freed }).map(\.name))
                 let uninitialized = uninitializedVariables.union(uninitializedVariable.map({ [ $0 ] }) ?? [])
-                refCountedStatements = [ .ifStatement(uuid: uuid, conditions: conditions, statements: refCount(statements: statements, existingVariables: variables, uninitializedVariables: uninitialized), elseIfs: elseIfs?.map({ ($0.conditions, refCount(statements: $0.statements, existingVariables: variables, uninitializedVariables: uninitialized)) }), elseStatements: elseStatements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) })) ]
+                refCountedStatements = [ .ifStatement(uuid: uuid, conditions: conditions, statements: statements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) }), elseStatements: elseStatements.map({ refCount(statements: $0, existingVariables: variables, uninitializedVariables: uninitialized) })) ]
             case let .assignmentStatement(uuid: _, lhs: lhs, rhs: rhs):
                 if !lhs.returns.isRefCounted {
                     refCountedStatements = [ statement ]

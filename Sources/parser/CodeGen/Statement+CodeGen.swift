@@ -25,36 +25,35 @@ extension Statement {
             return statements + [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: expression.returns, expression: expression) ]
         case let .ifStatement(conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             var primitiveStatements: [PrimitiveStatement] = []
-            var primitiveConditions: [PrimitiveExpression] = []
+            
+            var primitiveConditions: [[PrimitiveExpression]] = [[]]
+            var resultStatements: [[PrimitiveStatement]] = []
             
             conditions.forEach { condition in
                 let (statements, expression) = condition.name(refCounter: refCounter)
                 primitiveStatements.append(contentsOf: statements)
-                primitiveConditions.append(expression)
+                primitiveConditions[0].append(expression)
             }
             
-            let primitiveElseIfs: [(conditions: [PrimitiveExpression], statements: [PrimitiveStatement])]?
+            resultStatements.append(statements.flatMap({ $0.gen(refCounter: refCounter) }))
+            
             if let elseIfs = elseIfs {
-                var _primitiveElseIfs: [(conditions: [PrimitiveExpression], statements: [PrimitiveStatement])] = []
-                elseIfs.forEach { pair in
+                elseIfs.enumerated().forEach { index, pair in
                     let (conditions, statements) = pair
-                    var primitiveConditions: [PrimitiveExpression] = []
+                    
+                    primitiveConditions.append([])
                     
                     conditions.forEach { condition in
                         let (statements, expression) = condition.name(refCounter: refCounter)
                         primitiveStatements.append(contentsOf: statements)
-                        primitiveConditions.append(expression)
+                        primitiveConditions[index + 1].append(expression)
                     }
                     
-                    _primitiveElseIfs.append((primitiveConditions, statements.flatMap({ $0.gen(refCounter: refCounter) })))
+                    resultStatements.append(statements.flatMap({ $0.gen(refCounter: refCounter) }))
                 }
-                
-                primitiveElseIfs = _primitiveElseIfs
-            } else {
-                primitiveElseIfs = nil
             }
             
-            let statement = PrimitiveStatement.ifStatement(uuid: refCounter.newUUID(), conditions: primitiveConditions, statements: statements.flatMap({ $0.gen(refCounter: refCounter) }), elseIfs: primitiveElseIfs, elseStatements: elseStatements?.flatMap({ $0.gen(refCounter: refCounter) }))
+            let statement = PrimitiveStatement.ifStatement(uuid: refCounter.newUUID(), conditions: primitiveConditions, statements: resultStatements, elseStatements: elseStatements?.flatMap({ $0.gen(refCounter: refCounter) }))
             
             return primitiveStatements + [ statement ]
         case let .variableIfDeclaration(isMutable: _, name: name, typeReference: _, checked: checked, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
