@@ -87,9 +87,9 @@ extension Statement {
             return primitiveStatements
         case let .assignmentStatement(lhs: lhs, rhs: rhs, file: _, location: _):
             let (lhsStatements, lhsExpression) = lhs.name(codeGen: codeGen)
-            let (rhsStatements, rhsExpression) = rhs.name(codeGen: codeGen)
+            let (rhsStatements, rhsExpression) = rhs.gen(codeGen: codeGen)
             
-            return lhsStatements + rhsStatements + [ .assignmentStatement(uuid: codeGen.newUUID(), lhs: lhsExpression, rhs: .expression(rhsExpression)) ]
+            return lhsStatements + rhsStatements + [ .assignmentStatement(uuid: codeGen.newUUID(), lhs: lhsExpression, rhs: rhsExpression) ]
         case let .returnIfStatement(checked: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             func implementLast(_ statements: [Statement]) -> [Statement] {
                 let last: Statement
