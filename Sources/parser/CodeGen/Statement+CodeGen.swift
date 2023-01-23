@@ -8,21 +8,21 @@
 import Foundation
 
 extension Statement {
-    func gen(refCounter: RefCounter) -> [PrimitiveStatement] {
+    func gen(codeGen: CodeGen) -> [PrimitiveStatement] {
         switch self {
         case let .expression(expression):
-            let (statements, expression) = expression.gen(refCounter: refCounter)
-            return statements + [ .expression(uuid: refCounter.newUUID(), expression) ]
+            let (statements, expression) = expression.gen(codeGen: codeGen)
+            return statements + [ .expression(uuid: codeGen.newUUID(), expression) ]
         case let .returnStatement(expression: expression, file: _, location: _):
             if let expression = expression {
-                let (statements, expression) = expression.name(refCounter: refCounter)
-                return statements + [ .returnStatement(uuid: refCounter.newUUID(), expression: expression) ]
+                let (statements, expression) = expression.name(codeGen: codeGen)
+                return statements + [ .returnStatement(uuid: codeGen.newUUID(), expression: expression) ]
             } else {
-                return [ .returnStatement(uuid: refCounter.newUUID(), expression: nil) ]
+                return [ .returnStatement(uuid: codeGen.newUUID(), expression: nil) ]
             }
         case let .variableDeclaration(isMutable: _, name: name, typeReference: _, expression: expression, file: _, location: _):
-            let (statements, expression) = expression.gen(refCounter: refCounter)
-            return statements + [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: expression.returns, expression: expression) ]
+            let (statements, expression) = expression.gen(codeGen: codeGen)
+            return statements + [ .variableDeclaration(uuid: codeGen.newUUID(), name: name.identifier, typeReference: expression.returns, expression: expression) ]
         case let .ifStatement(conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             var primitiveStatements: [PrimitiveStatement] = []
             
@@ -30,12 +30,12 @@ extension Statement {
             var resultStatements: [[PrimitiveStatement]] = []
             
             conditions.forEach { condition in
-                let (statements, expression) = condition.name(refCounter: refCounter)
+                let (statements, expression) = condition.name(codeGen: codeGen)
                 primitiveStatements.append(contentsOf: statements)
                 primitiveConditions[0].append(expression)
             }
             
-            resultStatements.append(statements.flatMap({ $0.gen(refCounter: refCounter) }))
+            resultStatements.append(statements.flatMap({ $0.gen(codeGen: codeGen) }))
             
             if let elseIfs = elseIfs {
                 elseIfs.enumerated().forEach { index, pair in
@@ -44,20 +44,20 @@ extension Statement {
                     primitiveConditions.append([])
                     
                     conditions.forEach { condition in
-                        let (statements, expression) = condition.name(refCounter: refCounter)
+                        let (statements, expression) = condition.name(codeGen: codeGen)
                         primitiveStatements.append(contentsOf: statements)
                         primitiveConditions[index + 1].append(expression)
                     }
                     
-                    resultStatements.append(statements.flatMap({ $0.gen(refCounter: refCounter) }))
+                    resultStatements.append(statements.flatMap({ $0.gen(codeGen: codeGen) }))
                 }
             }
             
-            let statement = PrimitiveStatement.ifStatement(uuid: refCounter.newUUID(), conditions: primitiveConditions, statements: resultStatements, elseStatements: elseStatements?.flatMap({ $0.gen(refCounter: refCounter) }))
+            let statement = PrimitiveStatement.ifStatement(uuid: codeGen.newUUID(), conditions: primitiveConditions, statements: resultStatements, elseStatements: elseStatements?.flatMap({ $0.gen(codeGen: codeGen) }))
             
             return primitiveStatements + [ statement ]
         case let .variableIfDeclaration(isMutable: _, name: name, typeReference: _, checked: checked, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
-            var primitiveStatements: [PrimitiveStatement] = [ .variableDeclaration(uuid: refCounter.newUUID(), name: name.identifier, typeReference: checked.id, expression: nil) ]
+            var primitiveStatements: [PrimitiveStatement] = [ .variableDeclaration(uuid: codeGen.newUUID(), name: name.identifier, typeReference: checked.id, expression: nil) ]
             
             func implementLast(_ statements: [Statement]) -> [Statement] {
                 let last: Statement
@@ -82,14 +82,14 @@ extension Statement {
                 elseIfStatements = nil
             }
             
-            primitiveStatements += Statement.ifStatement(conditions: conditions, statements: implementLast(statements), elseIfs: elseIfStatements, elseStatements: implementLast(elseStatements), file: file, location: location).gen(refCounter: refCounter)
+            primitiveStatements += Statement.ifStatement(conditions: conditions, statements: implementLast(statements), elseIfs: elseIfStatements, elseStatements: implementLast(elseStatements), file: file, location: location).gen(codeGen: codeGen)
             
             return primitiveStatements
         case let .assignmentStatement(lhs: lhs, rhs: rhs, file: _, location: _):
-            let (lhsStatements, lhsExpression) = lhs.name(refCounter: refCounter)
-            let (rhsStatements, rhsExpression) = rhs.name(refCounter: refCounter)
+            let (lhsStatements, lhsExpression) = lhs.name(codeGen: codeGen)
+            let (rhsStatements, rhsExpression) = rhs.name(codeGen: codeGen)
             
-            return lhsStatements + rhsStatements + [ .assignmentStatement(uuid: refCounter.newUUID(), lhs: lhsExpression, rhs: .expression(rhsExpression)) ]
+            return lhsStatements + rhsStatements + [ .assignmentStatement(uuid: codeGen.newUUID(), lhs: lhsExpression, rhs: .expression(rhsExpression)) ]
         case let .returnIfStatement(checked: _, conditions: conditions, statements: statements, elseIfs: elseIfs, elseStatements: elseStatements, file: _, location: _):
             func implementLast(_ statements: [Statement]) -> [Statement] {
                 let last: Statement
@@ -114,7 +114,7 @@ extension Statement {
                 elseIfStatements = nil
             }
             
-            return Statement.ifStatement(conditions: conditions, statements: implementLast(statements), elseIfs: elseIfStatements, elseStatements: implementLast(elseStatements), file: file, location: location).gen(refCounter: refCounter)
+            return Statement.ifStatement(conditions: conditions, statements: implementLast(statements), elseIfs: elseIfStatements, elseStatements: implementLast(elseStatements), file: file, location: location).gen(codeGen: codeGen)
         }
     }
 }

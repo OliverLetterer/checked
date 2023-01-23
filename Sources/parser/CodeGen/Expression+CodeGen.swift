@@ -8,14 +8,14 @@
 import Foundation
 
 extension Expression {
-    func gen(refCounter: RefCounter) -> ([PrimitiveStatement], PrimitiveStatement.AssignableExpression) {
+    func gen(codeGen: CodeGen) -> ([PrimitiveStatement], PrimitiveStatement.AssignableExpression) {
         switch self {
         case let .functionCallExpression(name: _, function: checked, arguments: arguments, returns: returns, file: _, location: _):
             var primitiveStatements: [PrimitiveStatement] = []
             var primitiveArguments: [PrimitiveExpression] = []
 
             arguments.forEach { argument in
-                let (newStatements, expression) = argument.expression.name(refCounter: refCounter)
+                let (newStatements, expression) = argument.expression.name(codeGen: codeGen)
 
                 primitiveStatements.append(contentsOf: newStatements)
                 primitiveArguments.append(expression)
@@ -23,16 +23,16 @@ extension Expression {
 
             return (primitiveStatements, .functionCallExpression(function: checked.id, arguments: primitiveArguments, returns: returns.id))
         case let .groupedExpression(expression: expression, returns: _, file: _, location: _):
-            return expression.gen(refCounter: refCounter)
+            return expression.gen(codeGen: codeGen)
         case .integerLiteralExpression, .floatingPointLiteralExpression, .booleanLiteralExpression, .stringLiteralExpression, .variableReferenceExpression:
-            return ([], .expression(name(refCounter: refCounter).1))
+            return ([], .expression(name(codeGen: codeGen).1))
         case let .prefixOperatorExpression(operator: _, checked: checked, expression: expression, returns: returns, file: _, location: _):
-            let (statements, expression) = expression.name(refCounter: refCounter)
+            let (statements, expression) = expression.name(codeGen: codeGen)
             return (statements, .prefixOperatorExpression(operator: checked.id, expression: expression, returns: returns.id))
         case let .binaryOperatorExpression(operator: op, checked: checked, lhs: lhs, rhs: rhs, returns: returns, file: file, location: _):
             func defaultOrder() -> ([PrimitiveStatement], PrimitiveStatement.AssignableExpression) {
-                let (lhsStatements, lhsExpression) = lhs.name(refCounter: refCounter)
-                let (rhsStatements, rhsExpression) = rhs.name(refCounter: refCounter)
+                let (lhsStatements, lhsExpression) = lhs.name(codeGen: codeGen)
+                let (rhsStatements, rhsExpression) = rhs.name(codeGen: codeGen)
 
                 return (lhsStatements + rhsStatements, .binaryOperatorExpression(checked.id, lhs: lhsExpression, rhs: rhsExpression, returns: returns.id))
             }
@@ -41,7 +41,7 @@ extension Expression {
             case let .binaryOperatorExpression(operator: rhsOp, checked: rhsChecked, lhs: rhsLhs, rhs: rhsRhs, returns: rhsReturns, file: rhsFile, location: _):
                 if rhsOp.op.precedence > op.op.precedence {
                     let resultLhs = Expression.binaryOperatorExpression(operator: op, checked: checked, lhs: lhs, rhs: rhsLhs, returns: returns, file: file, location: lhs.location.lowerBound..<rhsLhs.location.upperBound)
-                    return Expression.binaryOperatorExpression(operator: rhsOp, checked: rhsChecked, lhs: resultLhs, rhs: rhsRhs, returns: rhsReturns, file: rhsFile, location: resultLhs.location.lowerBound..<rhsRhs.location.upperBound).gen(refCounter: refCounter)
+                    return Expression.binaryOperatorExpression(operator: rhsOp, checked: rhsChecked, lhs: resultLhs, rhs: rhsRhs, returns: rhsReturns, file: rhsFile, location: resultLhs.location.lowerBound..<rhsRhs.location.upperBound).gen(codeGen: codeGen)
                 } else {
                     return defaultOrder()
                 }
@@ -49,12 +49,12 @@ extension Expression {
                 return defaultOrder()
             }
         case let .methodCallExpression(instance: instance, name: _, method: method, arguments: arguments, returns: returns, file: _, location: _):
-            let (instanceStatements, instanceExpression) = instance.name(refCounter: refCounter)
+            let (instanceStatements, instanceExpression) = instance.name(codeGen: codeGen)
             var primitiveStatements: [PrimitiveStatement] = []
             var primitiveArguments: [PrimitiveExpression] = []
 
             arguments.forEach { argument in
-                let (newStatements, expression) = argument.expression.name(refCounter: refCounter)
+                let (newStatements, expression) = argument.expression.name(codeGen: codeGen)
 
                 primitiveStatements.append(contentsOf: newStatements)
                 primitiveArguments.append(expression)
@@ -64,13 +64,13 @@ extension Expression {
         }
     }
     
-    func name(refCounter: RefCounter) -> ([PrimitiveStatement], PrimitiveExpression) {
+    func name(codeGen: CodeGen) -> ([PrimitiveStatement], PrimitiveExpression) {
         switch self {
         case .functionCallExpression, .groupedExpression, .prefixOperatorExpression, .binaryOperatorExpression, .methodCallExpression:
-            let (primitiveStatements, expression) = gen(refCounter: refCounter)
+            let (primitiveStatements, expression) = gen(codeGen: codeGen)
 
-            let name = refCounter.codeGen.newVariable()
-            let last = PrimitiveStatement.variableDeclaration(uuid: refCounter.newUUID(), name: name, typeReference: returns.id, expression: expression)
+            let name = codeGen.newVariable()
+            let last = PrimitiveStatement.variableDeclaration(uuid: codeGen.newUUID(), name: name, typeReference: returns.id, expression: expression)
 
             return (primitiveStatements + [ last ], .variableReferenceExpression(variable: name, returns: returns.id))
         case let .integerLiteralExpression(literal: literal, returns: returns, file: _, location: _):

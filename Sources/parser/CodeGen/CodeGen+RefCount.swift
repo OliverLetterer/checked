@@ -61,6 +61,8 @@ private extension PrimitiveStatement {
             return conditionsReferences || statementsReferences || elseStatementsReferences
         case let .assignmentStatement(uuid: _, lhs: lhs, rhs: rhs):
             return lhs.references(variable: variable) || rhs.references(variable: variable)
+        case let .scopeBlock(uuid: _, statements: statements):
+            return statements.prefix(while: { !$0.declares(variable: variable) }).contains(where: { $0.references(variable: variable) }) 
         case .retain, .release:
             return false
         }
@@ -76,38 +78,8 @@ private extension PrimitiveStatement {
     }
 }
 
-class RefCounter {
-    let codeGen: CodeGen
-    let statements: [Statement]
-    
-    private var lock: os_unfair_lock = .init()
-    private var uuids: Set<UUID> = []
-    
-    init(codeGen: CodeGen, statements: [Statement]) {
-        self.codeGen = codeGen
-        self.statements = statements
-    }
-    
-    func newUUID() -> UUID {
-        os_unfair_lock_lock(&lock)
-        defer {
-            os_unfair_lock_unlock(&lock)
-        }
-        
-        var result = UUID()
-        while uuids.contains(result) {
-            result = UUID()
-        }
-        
-        uuids.insert(result)
-        return result
-    }
-    
-    func implement() -> String {
-        return refCount(statements: statements.flatMap({ $0.gen(refCounter: self) })).map({ $0.implement() }).joined(separator: "\n")
-    }
-    
-    private func refCount(statements: [PrimitiveStatement], existingVariables: Set<String> = [], uninitializedVariables: Set<String> = []) -> [PrimitiveStatement] {
+extension CodeGen {
+    static func refCount(statements: [PrimitiveStatement], existingVariables: Set<String> = [], uninitializedVariables: Set<String> = []) -> [PrimitiveStatement] {
         var trackedExistingVariables: [String: UUID] = [:]
         var trackedVariables: [String: UUID] = [:]
         
@@ -193,6 +165,8 @@ class RefCounter {
             
             let refCountedStatements: [PrimitiveStatement]
             switch statement {
+            case .expression, .returnStatement:
+                refCountedStatements = [ statement ]
             case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseStatements: elseStatements):
                 let variables = existingVariables.subtracting(freedExistingVariables).filter({ variable in !usedVariables.contains(where: { $0.name == variable }) }).union(usedVariables.filter({ !$0.freed }).map(\.name))
                 let uninitialized = uninitializedVariables.union(uninitializedVariable.map({ [ $0 ] }) ?? [])
@@ -210,6 +184,10 @@ class RefCounter {
                     
                     refCountedStatements = referenceCountExpression(expression: rhs) + lhsRelease + [ statement ]
                 }
+            case let .scopeBlock(uuid: uuid, statements: statements):
+                let variables = existingVariables.subtracting(freedExistingVariables).filter({ variable in !usedVariables.contains(where: { $0.name == variable }) }).union(usedVariables.filter({ !$0.freed }).map(\.name))
+                let uninitialized = uninitializedVariables.union(uninitializedVariable.map({ [ $0 ] }) ?? [])
+                refCountedStatements = [ .scopeBlock(uuid: uuid, statements: refCount(statements: statements, existingVariables: variables, uninitializedVariables: uninitialized)) ]
             case let .variableDeclaration(uuid: _, name: name, typeReference: typeReference, expression: expression):
                 if !typeReference.isRefCounted {
                     refCountedStatements = [ statement ]
@@ -222,8 +200,8 @@ class RefCounter {
                     
                     refCountedStatements = referenceCountExpression(expression: expression) + [ statement ]
                 }
-            default:
-                refCountedStatements = [ statement ]
+            case .retain, .release:
+                fatalError()
             }
             
             var releases: [PrimitiveStatement] = []

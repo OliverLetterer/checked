@@ -15,6 +15,15 @@ public enum PrimitiveExpression {
     case stringLiteralExpression(literal: String, variable: String, returns: TypeId)
     case variableReferenceExpression(variable: String, returns: TypeId)
     
+    var inputs: Set<String> {
+        switch self {
+        case let .variableReferenceExpression(variable: variable, returns: _):
+            return [ variable ]
+        default:
+            return []
+        }
+    }
+    
     var returns: TypeId {
         switch self {
         case let .integerLiteralExpression(literal: _, returns: returns), let .floatingPointLiteralExpression(literal: _, returns: returns), let .booleanLiteralExpression(literal: _, returns: returns), let .stringLiteralExpression(literal: _, variable: _, returns: returns), let .variableReferenceExpression(variable: _, returns: returns):

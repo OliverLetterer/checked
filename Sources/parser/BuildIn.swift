@@ -7,6 +7,46 @@
 
 import Foundation
 
+protocol NativeType {
+    init?(_ string: String)
+    var description: String { get }
+}
+
+protocol NativeEquatable: NativeType, Equatable {
+    
+}
+
+protocol NativeInteger: NativeEquatable, Comparable {
+    static func &(_ lhs: Self, _ rhs: Self) -> Self
+    static func |(_ lhs: Self, _ rhs: Self) -> Self
+    static func ^(_ lhs: Self, _ rhs: Self) -> Self
+    static func %(_ lhs: Self, _ rhs: Self) -> Self
+    
+    func addingReportingOverflow(_ other: Self) -> (partialValue: Self, overflow: Swift.Bool)
+    func subtractingReportingOverflow(_ other: Self) -> (partialValue: Self, overflow: Bool)
+    func multipliedReportingOverflow(by other: Self) -> (partialValue: Self, overflow: Bool)
+    func dividedReportingOverflow(by other: Self) -> (partialValue: Self, overflow: Bool)
+}
+
+protocol NativeArithmetic: NativeEquatable, Comparable {
+    static func +(_ lhs: Self, _ rhs: Self) -> Self
+    static func -(_ lhs: Self, _ rhs: Self) -> Self
+    static func *(_ lhs: Self, _ rhs: Self) -> Self
+    static func /(_ lhs: Self, _ rhs: Self) -> Self
+}
+
+extension Int8: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension Int16: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension Int32: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension Int64: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension UInt8: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension UInt16: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension UInt32: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension UInt64: NativeEquatable, NativeInteger, NativeArithmetic { }
+extension Bool: NativeEquatable { }
+extension Float: NativeEquatable, NativeArithmetic { }
+extension Double: NativeEquatable, NativeArithmetic { }
+
 class BuildIn: ModuleContext, CodeGenerator {
     public private(set) var `Void`: TypeId! = nil
     public private(set) var `Int8`: TypeId! = nil
@@ -31,6 +71,11 @@ class BuildIn: ModuleContext, CodeGenerator {
     private var functionCodeGen: [FunctionDefinition: ([String]) -> String] = [:]
     private var methodCodeGen: [MethodDefinition: (String, [String]) -> String] = [:]
     
+    private var prefixOperatorCode: [PrefixOperatorId: (CompileTimeExpression) throws -> CompileTimeExpression] = [:]
+    private var operatorCode: [OperatorId: (CompileTimeExpression, CompileTimeExpression) throws -> CompileTimeExpression] = [:]
+    private var functionCode: [FunctionId: ([CompileTimeExpression]) throws -> CompileTimeExpression] = [:]
+    private var methodCode: [MethodId: (CompileTimeExpression, [CompileTimeExpression]) throws -> CompileTimeExpression] = [:]
+    
     override init(name: String, codeGen: CodeGen) throws {
         try super.init(name: name, codeGen: codeGen)
         
@@ -48,56 +93,197 @@ class BuildIn: ModuleContext, CodeGenerator {
         self.Double = try! self.register(StructDefinition(name: "Double"), from: nil)
         self.String = try! self.register(StructDefinition(name: "String"), from: nil)
         
-        for primitive in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64, self.Bool, self.Float, self.Double] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .equal, isImpure: false, lhs: .init(typeReference: primitive), rhs: .init(typeReference: primitive), returns: self.Bool)) { $0 + " == " + $1 }
+        func registerInteger<T: NativeInteger>(integer: TypeId, native: T.Type) {
+            try! self.register(OperatorDefinition(op: .binaryAnd, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " & " + $1 } code: { lhs, rhs in
+                return .integerLiteral(literal: (T(lhs.integerLiteral)! & T(rhs.integerLiteral)!).description, returns: integer)
+            }
+            
+            try! self.register(OperatorDefinition(op: .binaryOr, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " | " + $1 } code: { lhs, rhs in
+                return .integerLiteral(literal: (T(lhs.integerLiteral)! | T(rhs.integerLiteral)!).description, returns: integer)
+            }
+            
+            try! self.register(OperatorDefinition(op: .binaryXor, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " ^ " + $1 } code: { lhs, rhs in
+                return .integerLiteral(literal: (T(lhs.integerLiteral)! ^ T(rhs.integerLiteral)!).description, returns: integer)
+            }
+            
+            try! self.register(OperatorDefinition(op: .modulo, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " % " + $1 } code: { lhs, rhs in
+                return .integerLiteral(literal: (T(lhs.integerLiteral)! % T(rhs.integerLiteral)!).description, returns: integer)
+            }
+            
+            try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " + " + $1 } code: { lhs, rhs in
+                let (result, overflow) = T(lhs.integerLiteral)!.addingReportingOverflow(T(rhs.integerLiteral)!)
+                
+                if overflow {
+                    throw CodeGenError.notRepresentable(value: "\(lhs.integerLiteral) + \(rhs.integerLiteral)", type: "\(T.self)")
+                } else {
+                    return .integerLiteral(literal: result.description, returns: integer)
+                }
+            }
+            
+            try! self.register(OperatorDefinition(op: .minus, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " - " + $1 } code: { lhs, rhs in
+                let (result, overflow) = T(lhs.integerLiteral)!.subtractingReportingOverflow(T(rhs.integerLiteral)!)
+                
+                if overflow {
+                    throw CodeGenError.notRepresentable(value: "\(lhs.integerLiteral) - \(rhs.integerLiteral)", type: "\(T.self)")
+                } else {
+                    return .integerLiteral(literal: result.description, returns: integer)
+                }
+            }
+            
+            try! self.register(OperatorDefinition(op: .times, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " * " + $1 } code: { lhs, rhs in
+                let (result, overflow) = T(lhs.integerLiteral)!.multipliedReportingOverflow(by: T(rhs.integerLiteral)!)
+                
+                if overflow {
+                    throw CodeGenError.notRepresentable(value: "\(lhs.integerLiteral) * \(rhs.integerLiteral)", type: "\(T.self)")
+                } else {
+                    return .integerLiteral(literal: result.description, returns: integer)
+                }
+            }
+            
+            try! self.register(OperatorDefinition(op: .division, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " / " + $1 } code: { lhs, rhs in
+                let (result, overflow) = T(lhs.integerLiteral)!.dividedReportingOverflow(by: T(rhs.integerLiteral)!)
+                
+                if overflow {
+                    throw CodeGenError.notRepresentable(value: "\(lhs.integerLiteral) / \(rhs.integerLiteral)", type: "\(T.self)")
+                } else {
+                    return .integerLiteral(literal: result.description, returns: integer)
+                }
+            }
+            
+            try! self.register(OperatorDefinition(op: .equal, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: self.Bool)) { $0 + " == " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.integerLiteral)! == T(rhs.integerLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .greater, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: self.Bool)) { $0 + " > " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.integerLiteral)! > T(rhs.integerLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .greaterEqual, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: self.Bool)) { $0 + " >= " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.integerLiteral)! >= T(rhs.integerLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .smaller, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: self.Bool)) { $0 + " < " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.integerLiteral)! < T(rhs.integerLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .smallerEqual, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: self.Bool)) { $0 + " <= " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.integerLiteral)! <= T(rhs.integerLiteral)!, returns: self.Bool)
+            }
         }
         
-        for integer in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .binaryAnd, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " & " + $1 }
-            try! self.register(OperatorDefinition(op: .binaryOr, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " | " + $1 }
-            try! self.register(OperatorDefinition(op: .binaryXor, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " ^ " + $1 }
-            try! self.register(OperatorDefinition(op: .modulo, isImpure: false, lhs: .init(typeReference: integer), rhs: .init(typeReference: integer), returns: integer)) { $0 + " % " + $1 }
+        registerInteger(integer: self.Int8, native: Swift.Int8.self)
+        registerInteger(integer: self.Int16, native: Swift.Int16.self)
+        registerInteger(integer: self.Int32, native: Swift.Int32.self)
+        registerInteger(integer: self.Int64, native: Swift.Int64.self)
+        registerInteger(integer: self.UInt8, native: Swift.UInt8.self)
+        registerInteger(integer: self.UInt16, native: Swift.UInt16.self)
+        registerInteger(integer: self.UInt32, native: Swift.UInt32.self)
+        registerInteger(integer: self.UInt64, native: Swift.UInt64.self)
+        
+        func registerArithmetic<T: NativeArithmetic>(arithmetic: TypeId, native: T.Type) {
+            try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: arithmetic)) { $0 + " + " + $1 } code: { lhs, rhs in
+                return .floatingPointLiteral(literal: (T(lhs.floatingPointLiteral)! + T(rhs.floatingPointLiteral)!).description, returns: arithmetic)
+            }
+            
+            try! self.register(OperatorDefinition(op: .minus, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: arithmetic)) { $0 + " - " + $1 } code: { lhs, rhs in
+                return .floatingPointLiteral(literal: (T(lhs.floatingPointLiteral)! - T(rhs.floatingPointLiteral)!).description, returns: arithmetic)
+            }
+            
+            try! self.register(OperatorDefinition(op: .times, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: arithmetic)) { $0 + " * " + $1 } code: { lhs, rhs in
+                return .floatingPointLiteral(literal: (T(lhs.floatingPointLiteral)! * T(rhs.floatingPointLiteral)!).description, returns: arithmetic)
+            }
+            
+            try! self.register(OperatorDefinition(op: .division, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: arithmetic)) { $0 + " / " + $1 } code: { lhs, rhs in
+                return .floatingPointLiteral(literal: (T(lhs.floatingPointLiteral)! / T(rhs.floatingPointLiteral)!).description, returns: arithmetic)
+            }
+            
+            try! self.register(OperatorDefinition(op: .equal, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: self.Bool)) { $0 + " == " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.floatingPointLiteral)! == T(rhs.floatingPointLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .greater, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: self.Bool)) { $0 + " > " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.floatingPointLiteral)! > T(rhs.floatingPointLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .greaterEqual, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: self.Bool)) { $0 + " >= " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.floatingPointLiteral)! >= T(rhs.floatingPointLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .smaller, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: self.Bool)) { $0 + " < " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.floatingPointLiteral)! < T(rhs.floatingPointLiteral)!, returns: self.Bool)
+            }
+            
+            try! self.register(OperatorDefinition(op: .smallerEqual, isImpure: false, lhs: .init(typeReference: arithmetic), rhs: .init(typeReference: arithmetic), returns: self.Bool)) { $0 + " <= " + $1 } code: { lhs, rhs in
+                return .booleanLiteral(literal: T(lhs.floatingPointLiteral)! <= T(rhs.floatingPointLiteral)!, returns: self.Bool)
+            }
         }
         
-        for comparable in [self.Int8, self.Int16, self.Int32, self.Int64, self.UInt8, self.UInt16, self.UInt32, self.UInt64, self.Float, self.Double] as [TypeId] {
-            try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " + " + $1 }
-            try! self.register(OperatorDefinition(op: .minus, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " - " + $1 }
-            try! self.register(OperatorDefinition(op: .times, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " * " + $1 }
-            try! self.register(OperatorDefinition(op: .division, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: comparable)) { $0 + " / " + $1 }
-            try! self.register(OperatorDefinition(op: .greater, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " > " + $1 }
-            try! self.register(OperatorDefinition(op: .greaterEqual, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " >= " + $1 }
-            try! self.register(OperatorDefinition(op: .smaller, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " < " + $1 }
-            try! self.register(OperatorDefinition(op: .smallerEqual, isImpure: false, lhs: .init(typeReference: comparable), rhs: .init(typeReference: comparable), returns: self.Bool)) { $0 + " <= " + $1 }
+        registerArithmetic(arithmetic: self.Float, native: Swift.Float.self)
+        registerArithmetic(arithmetic: self.Double, native: Swift.Double.self)
+        
+        try! self.register(OperatorDefinition(op: .equal, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " == " + $1 } code: { lhs, rhs in
+            return .booleanLiteral(literal: lhs.bool == rhs.bool, returns: self.Bool)
         }
         
-        try! self.register(PrefixOperatorDefinition(op: .not, isImpure: false, argument: .init(typeReference: self.Bool), returns: self.Bool)) { "!" + $0 }
+        try! self.register(PrefixOperatorDefinition(op: .not, isImpure: false, argument: .init(typeReference: self.Bool), returns: self.Bool)) { "!" + $0 } code: { argument in
+            return .booleanLiteral(literal: !argument.bool, returns: self.Bool)
+        }
         
-        try! self.register(OperatorDefinition(op: .and, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " && " + $1 }
-        try! self.register(OperatorDefinition(op: .or, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " || " + $1 }
+        try! self.register(OperatorDefinition(op: .and, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " && " + $1 } code: { lhs, rhs in
+            return .booleanLiteral(literal: lhs.bool && rhs.bool, returns: self.Bool)
+        }
         
-        try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: self.String), rhs: .init(typeReference: self.String), returns: self.String)) { "String_add(\($0), \($1))" }
+        try! self.register(OperatorDefinition(op: .or, isImpure: false, lhs: .init(typeReference: self.Bool), rhs: .init(typeReference: self.Bool), returns: self.Bool)) { $0 + " || " + $1 } code: { lhs, rhs in
+            return .booleanLiteral(literal: lhs.bool || rhs.bool, returns: self.Bool)
+        }
         
-        try! self.register(type: self.String, MethodDefinition(name: "replacing", isImpure: false, arguments: [ .init(name: "occurrenceOf", typeReference: self.String), .init(name: "with", typeReference: self.String) ], returns: self.String)) { "String_replacingOccurenceOfWith(\($0), \($1.joined(separator: ", ")))" }
+        try! self.register(OperatorDefinition(op: .plus, isImpure: false, lhs: .init(typeReference: self.String), rhs: .init(typeReference: self.String), returns: self.String)) { "String_add(\($0), \($1))" } code: { lhs, rhs in
+            return .stringLiteral(literal: lhs.string + rhs.string, returns: self.String)
+        }
+        
+        try! self.register(type: self.String, MethodDefinition(name: "replacing", isImpure: false, arguments: [ .init(name: "occurrenceOf", typeReference: self.String), .init(name: "with", typeReference: self.String) ], returns: self.String)) { "String_replacingOccurenceOfWith(\($0), \($1.joined(separator: ", ")))" } code: { lhs, arguments in
+            return .stringLiteral(literal: lhs.string.replacingOccurrences(of: arguments[0].string, with: arguments[1].string), returns: self.String)
+        }
     }
     
-    private func register(_ operatorDefinition: PrefixOperatorDefinition, codeGen: @escaping (String) -> String) throws {
-        try register(operatorDefinition, from: nil)
+    private func register(_ operatorDefinition: PrefixOperatorDefinition, codeGen: @escaping (String) -> String, code: ((CompileTimeExpression) throws -> CompileTimeExpression)? = nil) throws {
+        let operatorId = try register(operatorDefinition, from: nil)
         self.prefixOperatorCodeGen[operatorDefinition] = codeGen
+        
+        if !operatorDefinition.isImpure {
+            assert(code != nil)
+            self.prefixOperatorCode[operatorId] = code!
+        }
     }
     
-    private func register(_ operatorDefinition: OperatorDefinition, codeGen: @escaping (String, String) -> String) throws {
-        try register(operatorDefinition, from: nil)
+    private func register(_ operatorDefinition: OperatorDefinition, codeGen: @escaping (String, String) -> String, code: ((CompileTimeExpression, CompileTimeExpression) throws -> CompileTimeExpression)? = nil) throws {
+        let operatorId = try register(operatorDefinition, from: nil)
         self.operatorCodeGen[operatorDefinition] = codeGen
+        
+        if !operatorDefinition.isImpure {
+            assert(code != nil)
+            self.operatorCode[operatorId] = code!
+        }
     }
     
-    private func register(_ functionDefinition: FunctionDefinition, codeGen: @escaping ([String]) -> String) throws {
-        try register(functionDefinition, from: nil)
+    private func register(_ functionDefinition: FunctionDefinition, codeGen: @escaping ([String]) -> String, code: (([CompileTimeExpression]) throws -> CompileTimeExpression)? = nil) throws {
+        let functionId = try register(functionDefinition, from: nil)
         self.functionCodeGen[functionDefinition] = codeGen
+        
+        if !functionDefinition.isImpure {
+            assert(code != nil)
+            self.functionCode[functionId] = code!
+        }
     }
     
-    private func register(type: TypeId, _ methodDefinition: MethodDefinition, codeGen: @escaping (String, [String]) -> String) throws {
-        try structs.contexts[type]!.register(methodDefinition, from: nil)
+    private func register(type: TypeId, _ methodDefinition: MethodDefinition, codeGen: @escaping (String, [String]) -> String, code: ((CompileTimeExpression, [CompileTimeExpression]) throws -> CompileTimeExpression)? = nil) throws {
+        let methodId = try structs.contexts[type]!.register(methodDefinition, from: nil)
         self.methodCodeGen[methodDefinition] = codeGen
+        
+        if !methodDefinition.isImpure {
+            assert(code != nil)
+            self.methodCode[methodId] = code!
+        }
     }
     
     func implement(codeGen: CodeGen) {
@@ -304,5 +490,21 @@ extension BuildIn {
     
     func call(_ methodDefinition: MethodDefinition, instance: String, arguments: [String]) -> String {
         return methodCodeGen[methodDefinition]!(instance, arguments)
+    }
+    
+    func evaluateCompileTimeOperator(_ op: PrefixOperatorId, argument: CompileTimeExpression) throws -> CompileTimeExpression {
+        return try prefixOperatorCode[op]!(argument)
+    }
+    
+    func evaluateCompileTimeOperator(_ op: OperatorId, lhs: CompileTimeExpression, rhs: CompileTimeExpression) throws -> CompileTimeExpression {
+        return try operatorCode[op]!(lhs, rhs)
+    }
+    
+    func evaluateCompileTimeFunction(_ function: FunctionId, arguments: [CompileTimeExpression]) throws -> CompileTimeExpression {
+        return try functionCode[function]!(arguments)
+    }
+    
+    func evaluateCompileTimeMethod(_ method: MethodId, instance: CompileTimeExpression, arguments: [CompileTimeExpression]) throws -> CompileTimeExpression {
+        return try methodCode[method]!(instance, arguments)
     }
 }

@@ -25,6 +25,34 @@ public indirect enum PrimitiveStatement {
             }
         }
         
+        var isImpure: Bool {
+            switch self {
+            case .expression:
+                return false
+            case let .functionCallExpression(function: function, arguments: _, returns: _):
+                return function.definition.isImpure
+            case let .prefixOperatorExpression(operator: op, expression: _, returns: _):
+                return op.definition.isImpure
+            case let .binaryOperatorExpression(op, lhs: _, rhs: _, returns: _):
+                return op.definition.isImpure
+            case let .methodCallExpression(instance: _, method: method, arguments: _, returns: _):
+                return method.definition.isImpure
+            }
+        }
+        
+        var inputs: Set<String> {
+            switch self {
+            case let .expression(expression), let .prefixOperatorExpression(operator: _, expression: expression, returns: _):
+                return expression.inputs
+            case let .functionCallExpression(function: _, arguments: arguments, returns: _):
+                return Set(arguments.flatMap(\.inputs))
+            case let .binaryOperatorExpression(_, lhs: lhs, rhs: rhs, returns: _):
+                return lhs.inputs.union(rhs.inputs)
+            case let .methodCallExpression(instance: instance, method: _, arguments: arguments, returns: _):
+                return instance.inputs.union(arguments.flatMap(\.inputs))
+            }
+        }
+        
         func implement() -> String {
             switch self {
             case let .expression(expression):
@@ -46,12 +74,13 @@ public indirect enum PrimitiveStatement {
     case variableDeclaration(uuid: UUID, name: String, typeReference: TypeId, expression: AssignableExpression?)
     case ifStatement(uuid: UUID, conditions: [[PrimitiveExpression]], statements: [[PrimitiveStatement]], elseStatements: [PrimitiveStatement]?)
     case assignmentStatement(uuid: UUID, lhs: PrimitiveExpression, rhs: AssignableExpression)
+    case scopeBlock(uuid: UUID, statements: [PrimitiveStatement])
     case retain(String)
     case release(String)
     
     var uuid: UUID {
         switch self {
-        case let .expression(uuid: uuid, _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _):
+        case let .expression(uuid: uuid, _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _), let .scopeBlock(uuid: uuid, statements: _):
             return uuid
         case .retain, .release:
             fatalError()
@@ -98,6 +127,12 @@ public indirect enum PrimitiveStatement {
             return result
         case let .assignmentStatement(uuid: _, lhs: lhs, rhs: rhs):
             return lhs.implement() + " = " + rhs.implement() + ";"
+        case let .scopeBlock(uuid: _, statements: statements):
+            return """
+            {
+            \(statements.map({ $0.implement() }).joined(separator: "\n").withIndent(4))
+            }
+            """
         case let .retain(name):
             if name.hasPrefix("&") {
                 return "object_retain(\(name));"
