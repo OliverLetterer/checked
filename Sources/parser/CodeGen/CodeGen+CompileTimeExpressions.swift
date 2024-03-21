@@ -136,6 +136,16 @@ private extension PrimitiveStatement {
             } else {
                 return ([ self ], [])
             }
+        case let .assertion(uuid: _, condition: condition, reason: _, conditionExpression: conditionExpression, file: file, line: line, column: column):
+            if let result = condition.compileTimeExpression(withVariables: existingVariables) {
+                if !result.bool {
+                    throw CodeGenError.assertionFailure(conditionExpression: conditionExpression, file: file, line: line, column: column)
+                } else {
+                    return ([ self ], [])
+                }
+            } else {
+                return ([ self ], [])
+            }
         case let .returnStatement(uuid: uuid, expression: expression):
             if let result = expression?.compileTimeExpression(withVariables: existingVariables) {
                 let expression = result.primitiveExpression
@@ -288,7 +298,7 @@ extension CodeGen {
             }
             
             switch statement {
-            case .expression:
+            case .expression, .assertion:
                 break
             case let .returnStatement(uuid: _, expression: expression):
                 result = expression!.compileTimeExpression(withVariables: existingVariables())!

@@ -13,6 +13,30 @@ extension Statement {
         case let .expression(expression):
             let (statements, expression) = expression.gen(codeGen: codeGen)
             return statements + [ .expression(uuid: codeGen.newUUID(), expression) ]
+        case let .assertion(name: _, condition: condition, reason: reason, file: file, location: _):
+            var statements: [PrimitiveStatement] = []
+            
+            let (conditionStatements, conditionExpression) = condition.gen(codeGen: codeGen)
+            statements.append(contentsOf: conditionStatements)
+            
+            let conditionName = codeGen.newVariable()
+            statements.append(.variableDeclaration(uuid: codeGen.newUUID(), name: conditionName, typeReference: condition.returns.id, expression: conditionExpression))
+            
+            if let reason = reason {
+                let (reasonStatements, reasonExpression) = reason.gen(codeGen: codeGen)
+                statements.append(contentsOf: reasonStatements)
+                
+                let reasonName = codeGen.newVariable()
+                statements.append(.variableDeclaration(uuid: codeGen.newUUID(), name: reasonName, typeReference: reason.returns.id, expression: reasonExpression))
+                
+                return statements + [
+                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: .variableReferenceExpression(variable: reasonName, returns: reason.returns.id), conditionExpression: condition.content, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
+                ]
+            } else {
+                return statements + [
+                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: nil, conditionExpression: condition.content, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
+                ]
+            }
         case let .returnStatement(expression: expression, file: _, location: _):
             if let expression = expression {
                 let (statements, expression) = expression.name(codeGen: codeGen)

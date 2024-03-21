@@ -334,6 +334,18 @@ class BuildIn: ModuleContext, CodeGenerator {
             object_unlock((Object *)object);
         }
         
+        void std_assert(bool condition, const char *conditionExpression, const char *file, int line, int column) {
+            if (!condition) {
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        void std_assert_reason(bool condition, const String *reason, const char *conditionExpression, const char *file, int line, int column) {
+            if (!condition) {
+                exit(EXIT_FAILURE);
+            }
+        }
+        
         static inline String *String_add(const String *lhs, const String *rhs) {
             String *result = malloc(sizeof(Object) + sizeof(u_int64_t) + (size_t)lhs->count + (size_t)rhs->count);
             result->lock = false;

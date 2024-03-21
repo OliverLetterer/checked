@@ -9,6 +9,7 @@ import Foundation
 
 public enum CodeGenError: Error {
     case notRepresentable(value: String, type: String)
+    case assertionFailure(conditionExpression: String, file: URL, line: Int, column: Int)
 }
 
 public protocol CodeGeneratable: AST {
@@ -224,6 +225,13 @@ public class CodeGen {
                 if expression.isImpure {
                     result.append(statement)
                     requiredVariables.formUnion(expression.inputs)
+                }
+            case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, file: _, line: _, column: _):
+                result.append(statement)
+                requiredVariables.formUnion(condition.inputs)
+                
+                if let reason = reason {
+                    requiredVariables.formUnion(reason.inputs)
                 }
             case let .returnStatement(uuid: _, expression: expression):
                 result.removeAll()

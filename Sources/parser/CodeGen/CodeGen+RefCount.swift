@@ -49,6 +49,8 @@ private extension PrimitiveStatement {
         switch self {
         case let .expression(uuid: _, expression):
             return expression.references(variable: variable)
+        case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, file: _, line: _, column: _):
+            return condition.references(variable: variable) || (reason?.references(variable: variable) ?? false)
         case let .returnStatement(uuid: _, expression: expression):
             return expression?.references(variable: variable) ?? false
         case let .variableDeclaration(uuid: _, name: _, typeReference: _, expression: expression):
@@ -165,7 +167,7 @@ extension CodeGen {
             
             let refCountedStatements: [PrimitiveStatement]
             switch statement {
-            case .expression, .returnStatement:
+            case .expression, .assertion, .returnStatement:
                 refCountedStatements = [ statement ]
             case let .ifStatement(uuid: uuid, conditions: conditions, statements: statements, elseStatements: elseStatements):
                 let variables = existingVariables.subtracting(freedExistingVariables).filter({ variable in !usedVariables.contains(where: { $0.name == variable }) }).union(usedVariables.filter({ !$0.freed }).map(\.name))

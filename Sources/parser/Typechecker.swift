@@ -185,6 +185,17 @@ public class Typechecker {
             }
 
             return .expression(typechecked)
+        case let .assertion(name: name, condition: condition, reason: reason, file: file, location: location):
+            let typecheckedCondition = try typecheck(condition, module: module, context: context, preferredReturnType: .strict(preferredReturnTypes: [ buildIn.Bool ]))
+            let typecheckedReason: Expression?
+            
+            if let reason = reason {
+                typecheckedReason = try typecheck(reason, module: module, context: context, preferredReturnType: .strict(preferredReturnTypes: [ buildIn.String ]))
+            } else {
+                typecheckedReason = nil
+            }
+            
+            return .assertion(name: name, condition: typecheckedCondition, reason: typecheckedReason, file: file, location: location)
         case let .returnStatement(expression: expression, file: file, location: location):
             if let returnType = returnType {
                 if let expression = expression {

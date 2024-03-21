@@ -10,6 +10,7 @@ import CheckedScanner
 
 public enum Statement: AST {
     case expression(Expression)
+    case assertion(name: IdentifierToken, condition: Expression, reason: Expression?, file: URL, location: Range<Int>)
     case returnStatement(expression: Expression?, file: URL, location: Range<Int>)
     case variableDeclaration(isMutable: Bool, name: IdentifierToken, typeReference: TypeReference?, expression: Expression, file: URL, location: Range<Int>)
     case ifStatement(conditions: [Expression], statements: [Statement], elseIfs: [(conditions: [Expression], statements: [Statement])]?, elseStatements: [Statement]?, file: URL, location: Range<Int>)
@@ -21,7 +22,7 @@ public enum Statement: AST {
         switch self {
         case let .expression(expression):
             return expression.file
-        case let .returnStatement(expression: _, file: file, location: _), let .variableDeclaration(isMutable: _, name: _, typeReference: _, expression: _, file: file, location: _), let .ifStatement(conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _), let .variableIfDeclaration(isMutable: _, name: _, typeReference: _, checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _), let .assignmentStatement(lhs: _, rhs: _, file: file, location: _), let .returnIfStatement(checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _):
+        case let .assertion(name: _, condition: _, reason: _, file: file, location: _), let .returnStatement(expression: _, file: file, location: _), let .variableDeclaration(isMutable: _, name: _, typeReference: _, expression: _, file: file, location: _), let .ifStatement(conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _), let .variableIfDeclaration(isMutable: _, name: _, typeReference: _, checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _), let .assignmentStatement(lhs: _, rhs: _, file: file, location: _), let .returnIfStatement(checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: file, location: _):
             return file
         }
     }
@@ -30,7 +31,7 @@ public enum Statement: AST {
         switch self {
         case let .expression(expression):
             return expression.location
-        case let .returnStatement(expression: _, file: _, location: location), let .variableDeclaration(isMutable: _, name: _, typeReference: _, expression: _, file: _, location: location), let .ifStatement(conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location), let .variableIfDeclaration(isMutable: _, name: _, typeReference: _, checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location), let .assignmentStatement(lhs: _, rhs: _, file: _, location: location), let .returnIfStatement(checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location):
+        case let .assertion(name: _, condition: _, reason: _, file: _, location: location), let .returnStatement(expression: _, file: _, location: location), let .variableDeclaration(isMutable: _, name: _, typeReference: _, expression: _, file: _, location: location), let .ifStatement(conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location), let .variableIfDeclaration(isMutable: _, name: _, typeReference: _, checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location), let .assignmentStatement(lhs: _, rhs: _, file: _, location: location), let .returnIfStatement(checked: _, conditions: _, statements: _, elseIfs: _, elseStatements: _, file: _, location: location):
             return location
         }
     }
@@ -42,6 +43,21 @@ public enum Statement: AST {
             ExpressionStatement
             \(expression.description.withIndent(4))
             """
+        case let .assertion(name: _, condition: condition, reason: reason, file: _, location: _):
+            var components: [String] = ["""
+            Assertion
+            - condition
+            \(condition.description.withIndent(4))
+            """]
+            
+            if let reason = reason {
+                components.append("""
+                    - reason
+                    \(reason.description.withIndent(4))
+                    """)
+            }
+            
+            return components.joined(separator: "\n")
         case let .returnStatement(expression: expression, file: _, location: _):
             if let expression = expression {
                 return """
@@ -409,6 +425,35 @@ extension Statement {
             }
             
             result = .ifStatement(conditions: conditions, statements: statements, elseIfs: elseIfs.count > 0 ? elseIfs : nil, elseStatements: elseStatements, file: parser.file, location: keyword.location.lowerBound..<closeAngleBracket.location.upperBound)
+        } else if let identifier = next as? IdentifierToken, identifier.identifier == "assert" {
+            try! parser.drop()
+            try parser.accept(.openParan)
+            
+            let condition = try Expression.parse(parser: parser)
+            
+            let reason: Expression?
+            if parser.peek() is CommaToken {
+                try parser.accept(.comma)
+                
+                guard let label = parser.peek() else {
+                    throw ParserError.unexpectedEndOfFile(parser: parser)
+                }
+                
+                guard let label = label as? IdentifierToken, label.identifier == "reason" else {
+                    throw ParserError.unexpectedToken(parser: parser, token: label)
+                }
+                
+                try! parser.drop()
+                try parser.accept(.colon)
+                
+                reason = try Expression.parse(parser: parser)
+            } else {
+                reason = nil
+            }
+            
+            let closingParan = try parser.accept(.closeParan)
+            
+            result = .assertion(name: identifier, condition: condition, reason: reason, file: parser.file, location: identifier.location.lowerBound..<closingParan.location.upperBound)
         } else {
             let expression = try Expression.parse(parser: parser)
             
