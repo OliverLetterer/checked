@@ -244,6 +244,10 @@ class BuildIn: ModuleContext, CodeGenerator {
         try! self.register(type: self.String, MethodDefinition(name: "replacing", isImpure: false, arguments: [ .init(name: "occurrenceOf", typeReference: self.String), .init(name: "with", typeReference: self.String) ], returns: self.String)) { "String_replacingOccurenceOfWith(\($0), \($1.joined(separator: ", ")))" } code: { lhs, arguments in
             return .stringLiteral(literal: lhs.string.replacingOccurrences(of: arguments[0].string, with: arguments[1].string), returns: self.String)
         }
+        
+        try! self.register(FunctionDefinition(name: "print", isImpure: true, arguments: [ .init(typeReference: self.String) ], returns: nil)) { arguments in
+            return "print(\(arguments.first!))"
+        }
     }
     
     private func register(_ operatorDefinition: PrefixOperatorDefinition, codeGen: @escaping (String) -> String, code: ((CompileTimeExpression) throws -> CompileTimeExpression)? = nil) throws {
@@ -344,6 +348,10 @@ class BuildIn: ModuleContext, CodeGenerator {
             if (!condition) {
                 exit(EXIT_FAILURE);
             }
+        }
+        
+        static void print(const String *string) {
+            write(1, string->bytes, (size_t)string->count);
         }
         
         static inline String *String_add(const String *lhs, const String *rhs) {
