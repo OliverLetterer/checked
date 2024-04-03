@@ -68,8 +68,8 @@ public class Typechecker {
     internal let buildIn: BuildIn
     internal var modules: [ModuleContext] = []
     
-    public init() {
-        self.codeGen = CodeGen()
+    public init(configuration: CodeGen.Configuration) {
+        self.codeGen = CodeGen(configuration: configuration)
         self.buildIn = BuildIn.buildIn(codeGen: codeGen)
         
         add(module: self.buildIn)

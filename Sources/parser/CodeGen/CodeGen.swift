@@ -55,6 +55,13 @@ private extension PrimitiveStatement {
 }
 
 public class CodeGen {
+    public enum Configuration: Equatable {
+        case debug
+        case release
+    }
+    
+    public var configuration: Configuration
+    
     internal var header: [String] = []
     internal var implementation: [String] = []
     
@@ -70,6 +77,10 @@ public class CodeGen {
     var functions: [FunctionId: (FunctionDeclaration, [PrimitiveStatement])] = [:]
     var operators: [OperatorId: (OperatorDeclaration, [PrimitiveStatement])] = [:]
     var prefixOperators: [PrefixOperatorId: (PrefixOperatorDeclaration, [PrimitiveStatement])] = [:]
+    
+    init(configuration: Configuration) {
+        self.configuration = configuration
+    }
     
     public func newUUID() -> UUID {
         os_unfair_lock_lock(&lock)
@@ -120,8 +131,14 @@ public class CodeGen {
         #include <unistd.h>
         #include <memory.h>
         #include <stdatomic.h>
-        
         """)
+        
+        switch configuration {
+        case .debug:
+            header.append("#define DEBUG")
+        case .release:
+            header.append("#define RELEASE")
+        }
 
         guard let main: FunctionDeclaration = topLevelDeclarations.flatMap({ $0.functionDeclarations }).first(where: { $0.name.name == "main" && $0.arguments.count == 0 }) else {
             fatalError()
@@ -133,8 +150,6 @@ public class CodeGen {
         try topLevelDeclarations.forEach({ try $0.gen(codeGen: self) })
         
         try evaluateCompileTimeExpressions()
-        
-        header.append("")
         
         func generate<T: FunctionLikeGeneratable>(_ declaration: T, statements: [PrimitiveStatement]) {
             header.append(declaration.prototype + ";")
@@ -180,7 +195,7 @@ public class CodeGen {
             throw ParserError.invalidMainDeclaration(main: main)
         }
 
-        let source = header.joined(separator: "\n") + "\n\n" + implementation.joined(separator: "\n\n")
+        let source = header.joined(separator: "\n\n") + "\n\n" + implementation.joined(separator: "\n\n")
         print(source)
     }
     

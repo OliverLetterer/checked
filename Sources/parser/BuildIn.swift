@@ -351,7 +351,11 @@ class BuildIn: ModuleContext, CodeGenerator {
         }
         
         static void print(const String *string) {
-            write(1, string->bytes, (size_t)string->count);
+            #ifdef RELEASE
+                write(2, string->bytes, (size_t)string->count);
+            #else
+                write(1, string->bytes, (size_t)string->count);
+            #endif
         }
         
         static inline String *String_add(const String *lhs, const String *rhs) {

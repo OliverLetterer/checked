@@ -11,7 +11,7 @@ public struct checked {
         
         switch command {
         case "tokens":
-            guard let name = ProcessInfo.processInfo.arguments.dropFirst(2).first else {
+            guard let name = ProcessInfo.processInfo.arguments.last else {
                 fatalError("No file given")
             }
             
@@ -36,9 +36,11 @@ public struct checked {
                 }
             }
         case "ast":
-            guard let name = ProcessInfo.processInfo.arguments.dropFirst(2).first else {
+            guard let name = ProcessInfo.processInfo.arguments.last else {
                 fatalError("No file given")
             }
+            
+            let configuration: CodeGen.Configuration = ProcessInfo.processInfo.arguments.contains("release") ? .release : .debug
             
             let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(name)
             guard FileManager.default.fileExists(atPath: url.path) else {
@@ -53,7 +55,7 @@ public struct checked {
                     return try Parser.parse(file: url)
                 }
                 
-                let typechecker = Typechecker()
+                let typechecker = Typechecker(configuration: configuration)
                 let module = try ModuleContext(name: module, codeGen: typechecker.codeGen)
                 typechecker.add(module: module)
                 
@@ -72,9 +74,11 @@ public struct checked {
                 }
             }
         case "build":
-            guard let name = ProcessInfo.processInfo.arguments.dropFirst(2).first else {
+            guard let name = ProcessInfo.processInfo.arguments.last else {
                 fatalError("No file given")
             }
+            
+            let configuration: CodeGen.Configuration = ProcessInfo.processInfo.arguments.contains("release") ? .release : .debug
             
             let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(name)
             guard FileManager.default.fileExists(atPath: url.path) else {
@@ -89,7 +93,7 @@ public struct checked {
                     return try Parser.parse(file: url)
                 }
                 
-                let typechecker = Typechecker()
+                let typechecker = Typechecker(configuration: configuration)
                 let module = try ModuleContext(name: module, codeGen: typechecker.codeGen)
                 typechecker.add(module: module)
                 
