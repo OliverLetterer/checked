@@ -13,6 +13,9 @@ let package = Package(
             name: "CheckedScanner"
         ),
         .target(
+            name: "CheckedCompiler"
+        ),
+        .target(
             name: "parser",
             dependencies: [
                 "CheckedScanner",
