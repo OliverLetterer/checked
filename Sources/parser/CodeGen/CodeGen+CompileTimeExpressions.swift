@@ -136,7 +136,7 @@ private extension PrimitiveStatement {
             } else {
                 return ([ self ], [])
             }
-        case let .assertion(uuid: _, condition: condition, reason: _, conditionExpression: conditionExpression, file: file, line: line, column: column):
+        case let .assertion(uuid: _, condition: condition, reason: _, conditionExpression: conditionExpression, module: _, file: file, line: line, column: column):
             if let result = condition.compileTimeExpression(withVariables: existingVariables) {
                 if !result.bool {
                     throw CodeGenError.assertionFailure(conditionExpression: conditionExpression, file: file, line: line, column: column)

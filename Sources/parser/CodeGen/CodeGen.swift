@@ -242,7 +242,7 @@ public class CodeGen {
                     result.append(statement)
                     requiredVariables.formUnion(expression.inputs)
                 }
-            case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, file: _, line: _, column: _):
+            case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, module: _, file: _, line: _, column: _):
                 result.append(statement)
                 requiredVariables.formUnion(condition.inputs)
                 

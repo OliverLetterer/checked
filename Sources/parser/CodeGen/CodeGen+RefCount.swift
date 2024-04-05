@@ -49,7 +49,7 @@ private extension PrimitiveStatement {
         switch self {
         case let .expression(uuid: _, expression):
             return expression.references(variable: variable)
-        case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, file: _, line: _, column: _):
+        case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: _, module: _, file: _, line: _, column: _):
             return condition.references(variable: variable) || (reason?.references(variable: variable) ?? false)
         case let .returnStatement(uuid: _, expression: expression):
             return expression?.references(variable: variable) ?? false

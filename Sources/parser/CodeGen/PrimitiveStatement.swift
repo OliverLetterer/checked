@@ -70,7 +70,7 @@ public indirect enum PrimitiveStatement {
     }
     
     case expression(uuid: UUID, AssignableExpression)
-    case assertion(uuid: UUID, condition: PrimitiveExpression, reason: PrimitiveExpression?, conditionExpression: String, file: URL, line: Int, column: Int)
+    case assertion(uuid: UUID, condition: PrimitiveExpression, reason: PrimitiveExpression?, conditionExpression: String, module: String, file: URL, line: Int, column: Int)
     case returnStatement(uuid: UUID, expression: PrimitiveExpression?)
     case variableDeclaration(uuid: UUID, name: String, typeReference: TypeId, expression: AssignableExpression?)
     case ifStatement(uuid: UUID, conditions: [[PrimitiveExpression]], statements: [[PrimitiveStatement]], elseStatements: [PrimitiveStatement]?)
@@ -81,7 +81,7 @@ public indirect enum PrimitiveStatement {
     
     var uuid: UUID {
         switch self {
-        case let .expression(uuid: uuid, _), let .assertion(uuid: uuid, condition: _, reason: _, conditionExpression: _, file: _, line: _, column: _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _), let .scopeBlock(uuid: uuid, statements: _):
+        case let .expression(uuid: uuid, _), let .assertion(uuid: uuid, condition: _, reason: _, conditionExpression: _, module: _, file: _, line: _, column: _), let .returnStatement(uuid: uuid, expression: _), let .variableDeclaration(uuid: uuid, name: _, typeReference: _, expression: _), let .ifStatement(uuid: uuid, conditions: _, statements: _, elseStatements: _), let .assignmentStatement(uuid: uuid, lhs: _, rhs: _), let .scopeBlock(uuid: uuid, statements: _):
             return uuid
         case .retain, .release:
             fatalError()
@@ -92,11 +92,20 @@ public indirect enum PrimitiveStatement {
         switch self {
         case let .expression(uuid: _, expression):
             return expression.implement(codeGen: codeGen) + ";"
-        case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: conditionExpression, file: file, line: line, column: column):
-            if let reason = reason {
-                return "std_assert_reason(\(condition.implement(codeGen: codeGen)), \(reason.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.absoluteString.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
-            } else {
-                return "std_assert(\(condition.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.absoluteString.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
+        case let .assertion(uuid: _, condition: condition, reason: reason, conditionExpression: conditionExpression, module: module, file: file, line: line, column: column):
+            switch codeGen.configuration {
+            case .debug:
+                if let reason = reason {
+                    return "std_assert_reason(\(condition.implement(codeGen: codeGen)), \(reason.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.absoluteString.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
+                } else {
+                    return "std_assert(\(condition.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.absoluteString.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
+                }
+            case .release:
+                if let reason = reason {
+                    return "std_assert_reason_production(\(condition.implement(codeGen: codeGen)), \(reason.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(module.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.lastPathComponent.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
+                } else {
+                    return "std_assert_production(\(condition.implement(codeGen: codeGen)), \"\(conditionExpression.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(module.replacingOccurrences(of: "\"", with: "\\\""))\", \"\(file.lastPathComponent.replacingOccurrences(of: "\"", with: "\\\""))\", \(line), \(column));"
+                }
             }
         case let .returnStatement(uuid: _, expression: expression):
             if let expression = expression {

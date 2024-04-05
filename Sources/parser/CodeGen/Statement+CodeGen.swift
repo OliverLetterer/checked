@@ -13,7 +13,7 @@ extension Statement {
         case let .expression(expression):
             let (statements, expression) = expression.gen(codeGen: codeGen)
             return statements + [ .expression(uuid: codeGen.newUUID(), expression) ]
-        case let .assertion(name: _, condition: condition, reason: reason, file: file, location: _):
+        case let .assertion(name: _, condition: condition, reason: reason, module: module, file: file, location: _):
             var statements: [PrimitiveStatement] = []
             
             let (conditionStatements, conditionExpression) = condition.gen(codeGen: codeGen)
@@ -30,11 +30,11 @@ extension Statement {
                 statements.append(.variableDeclaration(uuid: codeGen.newUUID(), name: reasonName, typeReference: reason.returns.id, expression: reasonExpression))
                 
                 return statements + [
-                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: .variableReferenceExpression(variable: reasonName, returns: reason.returns.id), conditionExpression: condition.content, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
+                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: .variableReferenceExpression(variable: reasonName, returns: reason.returns.id), conditionExpression: condition.content, module: module!.name, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
                 ]
             } else {
                 return statements + [
-                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: nil, conditionExpression: condition.content, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
+                    .assertion(uuid: codeGen.newUUID(), condition: .variableReferenceExpression(variable: conditionName, returns: condition.returns.id), reason: nil, conditionExpression: condition.content, module: module!.name, file: file, line: condition.sourceFileLocation.line, column: condition.sourceFileLocation.column)
                 ]
             }
         case let .returnStatement(expression: expression, file: _, location: _):

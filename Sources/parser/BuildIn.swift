@@ -350,6 +350,18 @@ class BuildIn: ModuleContext, CodeGenerator {
             }
         }
         
+        void std_assert_production(bool condition, const char *conditionExpression, const char *module, const char *file, int line, int column) {
+            if (!condition) {
+                exit(EXIT_FAILURE);
+            }
+        }
+        
+        void std_assert_reason_production(bool condition, const String *reason, const char *conditionExpression, const char *module, const char *file, int line, int column) {
+            if (!condition) {
+                exit(EXIT_FAILURE);
+            }
+        }
+        
         static void print(const String *string) {
             #ifdef RELEASE
                 write(2, string->bytes, (size_t)string->count);
